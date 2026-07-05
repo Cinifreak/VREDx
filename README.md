@@ -3,12 +3,10 @@
 A VRED script plugin that adds a node-graph editor for **authoring, editing, and
 applying MaterialX materials** inside Autodesk VRED Pro.
 
-Created by Scott Rafferty @ Pyre Labs for use with the wider visualisation community.
-
 ## Features
 
 - **Palette from your VRED install** — nodedef libraries are read from the same
-  `VREDPro-*` tree that hosts the plugin (no cross-version conflicts)
+  `VREDPro-*` version that hosts the plugin (no cross-version conflicts)
 - **Node canvas** — typed ports, bezier wires, magnetic pin snapping, undo/redo
 - **VRED bridge** — Send to VRED, Send & Apply, optional Auto Update, preview swatch
 - **Validation** — type/cycle checks and VRED-specific warnings before send
@@ -33,7 +31,6 @@ loose Python file:
 1. Zip the `vredx/` folder to `vredx.zip` (paths inside the zip must start with
    `vredx/`).
 2. Delete the loose `vredx/` folder from the installed copy.
-3. Omit dev-only content (`tests/`, `docs/`, `.git/`, `resources/libraries/`).
 
 Restart VRED, then open **VREDX** from the menu bar or Scripts panel.
 
