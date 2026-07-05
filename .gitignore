@@ -10,5 +10,6 @@ docs/*
 CHANGELOG.md
 resources/libraries/
 vredx.zip
+dist/
 .vscode/
 *.log

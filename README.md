@@ -20,21 +20,24 @@ applying MaterialX materials** inside Autodesk VRED Pro.
 
 ## Install
 
-Copy this repository into your VRED Scripts folder (elevated prompt if VRED is
-under Program Files):
+### GitHub Release (recommended)
+
+1. Download **VredX-x.y.z.zip** from [Releases](https://github.com/ScottRaffertyCG/VREDx/releases).
+2. Extract into your VRED Scripts folder (elevated prompt if VRED is under
+   Program Files):
 
 ```
-C:\Program Files\Autodesk\VREDPro-19.1\lib\plugins\WIN64\Scripts\VredX
+C:\Program Files\Autodesk\VREDPro-19.1\lib\plugins\WIN64\Scripts
 ```
 
-Before starting VRED, package the library so the plugin scanner only sees one
-loose Python file:
+3. Confirm the result is `…\Scripts\VredX\` containing `VredX.py` and
+   `vredx.zip` (no loose `vredx/` folder).
+4. Restart VRED, then open **VREDX** from the menu bar or Scripts panel.
 
-1. Zip the `vredx/` folder to `vredx.zip` (paths inside the zip must start with
-   `vredx/`).
-2. Delete the loose `vredx/` folder from the installed copy.
+### From source
 
-Restart VRED, then open **VREDX** from the menu bar or Scripts panel.
+Copy this repository into `…\Scripts\VredX`, then zip the `vredx/` folder to
+`vredx.zip` and delete the loose `vredx/` folder before starting VRED.
 
 **Do not leave loose `.py` files under `vredx/`.** VRED's plugin scanner executes
 every loose `.py` file it finds. The zip keeps the library importable via
