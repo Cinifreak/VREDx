@@ -20,17 +20,26 @@ Created by Scott Rafferty @ Pyre Labs for use with the wider visualisation commu
 
 ## Install
 
-From this folder (elevated prompt if VRED is under Program Files):
+Copy this repository into your VRED Scripts folder (elevated prompt if VRED is
+under Program Files):
 
 ```
-python install.py
+C:\Program Files\Autodesk\VREDPro-19.1\lib\plugins\WIN64\Scripts\VredX
 ```
+
+Before starting VRED, package the library so the plugin scanner only sees one
+loose Python file:
+
+1. Zip the `vredx/` folder to `vredx.zip` (paths inside the zip must start with
+   `vredx/`).
+2. Delete the loose `vredx/` folder from the installed copy.
+3. Omit dev-only content (`tests/`, `docs/`, `.git/`, `resources/libraries/`).
 
 Restart VRED, then open **VREDX** from the menu bar or Scripts panel.
 
-**Do not copy this folder manually.** VRED's plugin scanner executes every loose
-`.py` file it finds. The installer packages the `vredx/` library as `vredx.zip`
-(Python imports it; the scanner ignores zips) and omits dev-only folders.
+**Do not leave loose `.py` files under `vredx/`.** VRED's plugin scanner executes
+every loose `.py` file it finds. The zip keeps the library importable via
+`sys.path` without being scanned.
 
 ### What gets installed
 
@@ -58,8 +67,7 @@ be executed by VRED at startup — slow, noisy, and broken for relative imports.
 
 ## Repository contents
 
-This repo ships **plugin source + install script + README**. It does **not**
-include:
+This repo ships **plugin source + README**. It does **not** include:
 
 | Excluded | Reason |
 |----------|--------|
