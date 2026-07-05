@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <image name="base_color_map" type="color3" xpos="-4.5" ypos="-2.5">
+    <input name="file" type="filename" value=""/>
+  </image>
+  <image name="metalness_map" type="float" xpos="-4.5" ypos="1.5">
+    <input name="file" type="filename" value=""/>
+  </image>
+  <image name="normal_map" type="vector3" xpos="-4.5" ypos="3.5">
+    <input name="file" type="filename" value=""/>
+  </image>
+  <normalmap name="normalmap" type="vector3" xpos="-1.5" ypos="3.5">
+    <input name="in" type="vector3" nodename="normal_map"/>
+  </normalmap>
+  <image name="roughness_map" type="float" xpos="-4.5" ypos="-0.5">
+    <input name="file" type="filename" value=""/>
+  </image>
+  <standard_surface name="surface" type="surfaceshader" xpos="1.5" ypos="0">
+    <input name="base_color" type="color3" nodename="base_color_map"/>
+    <input name="metalness" type="float" nodename="metalness_map"/>
+    <input name="specular_roughness" type="float" nodename="roughness_map"/>
+    <input name="normal" type="vector3" nodename="normalmap"/>
+  </standard_surface>
+  <surfacematerial name="ImagePBRMaps" type="material" xpos="5" ypos="0">
+    <input name="surfaceshader" type="surfaceshader" nodename="surface"/>
+  </surfacematerial>
+</materialx>

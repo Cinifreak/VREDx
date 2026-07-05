@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <LamaConductor name="conductor" type="BSDF" xpos="-2.5" ypos="1.2">
+    <input name="reflectivity" type="color3" value="0.95, 0.93, 0.88"/>
+  </LamaConductor>
+  <LamaDiffuse name="diffuse" type="BSDF" xpos="-2.5" ypos="-0.5">
+    <input name="color" type="color3" value="0.75, 0.18, 0.08"/>
+    <input name="roughness" type="float" value="0.35"/>
+  </LamaDiffuse>
+  <LamaMix name="mix" type="BSDF" xpos="0" ypos="0.4">
+    <input name="material1" type="BSDF" nodename="diffuse"/>
+    <input name="material2" type="BSDF" nodename="conductor"/>
+    <input name="mix" type="float" value="0.55"/>
+  </LamaMix>
+  <surface name="surface" type="surfaceshader" xpos="2.5" ypos="0.4">
+    <input name="bsdf" type="BSDF" nodename="mix"/>
+  </surface>
+  <surfacematerial name="LamaMixMetals" type="material" xpos="5" ypos="0">
+    <input name="surfaceshader" type="surfaceshader" nodename="surface"/>
+  </surfacematerial>
+</materialx>

@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <texcoord name="uv" type="vector2" xpos="-5.5" ypos="0"/>
+  <multiply name="uv_scale" type="vector2" xpos="-3.5" ypos="0">
+    <input name="in1" type="vector2" nodename="uv"/>
+    <input name="in2" type="float" value="4.0"/>
+  </multiply>
+  <rotate2d name="uv_rotate" type="vector2" xpos="-1.5" ypos="0">
+    <input name="in" type="vector2" nodename="uv_scale"/>
+    <input name="amount" type="float" value="0.785"/>
+  </rotate2d>
+  <noise2d name="noise" type="color3" xpos="0.5" ypos="0">
+    <input name="texcoord" type="vector2" nodename="uv_rotate"/>
+  </noise2d>
+  <standard_surface name="surface" type="surfaceshader" xpos="2.5" ypos="0">
+    <input name="base_color" type="color3" nodename="noise"/>
+  </standard_surface>
+  <surfacematerial name="UVTransformNoise" type="material" xpos="5" ypos="0">
+    <input name="surfaceshader" type="surfaceshader" nodename="surface"/>
+  </surfacematerial>
+</materialx>

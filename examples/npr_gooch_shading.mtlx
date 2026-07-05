@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <gooch_shade name="gooch" type="color3" xpos="-3" ypos="0">
+    <input name="warm_color" type="color3" value="0.95, 0.75, 0.35"/>
+    <input name="cool_color" type="color3" value="0.15, 0.25, 0.65"/>
+  </gooch_shade>
+  <standard_surface name="surface" type="surfaceshader" xpos="1" ypos="0">
+    <input name="base_color" type="color3" nodename="gooch"/>
+    <input name="metalness" type="float" value="0.0"/>
+    <input name="specular_roughness" type="float" value="0.6"/>
+  </standard_surface>
+  <surfacematerial name="NPRGoochShading" type="material" xpos="5" ypos="0">
+    <input name="surfaceshader" type="surfaceshader" nodename="surface"/>
+  </surfacematerial>
+</materialx>

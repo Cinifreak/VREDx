@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <noise2d name="height" type="float" xpos="-4" ypos="1"/>
+  <displacement name="displacement" type="displacementshader" xpos="-1.5" ypos="1">
+    <input name="displacement" type="float" nodename="height"/>
+  </displacement>
+  <standard_surface name="surface" type="surfaceshader" xpos="1" ypos="0"/>
+  <surfacematerial name="DisplacementHeight" type="material" xpos="5" ypos="0">
+    <input name="surfaceshader" type="surfaceshader" nodename="surface"/>
+    <input name="displacementshader" type="displacementshader" nodename="displacement"/>
+  </surfacematerial>
+</materialx>

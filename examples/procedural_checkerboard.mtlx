@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <checkerboard name="checker" type="color3" xpos="-3" ypos="0">
+    <input name="color1" type="color3" value="0.9, 0.9, 0.9"/>
+    <input name="color2" type="color3" value="0.15, 0.15, 0.15"/>
+  </checkerboard>
+  <standard_surface name="surface" type="surfaceshader" xpos="1" ypos="0">
+    <input name="base_color" type="color3" nodename="checker"/>
+  </standard_surface>
+  <surfacematerial name="ProceduralCheckerboard" type="material" xpos="5" ypos="0">
+    <input name="surfaceshader" type="surfaceshader" nodename="surface"/>
+  </surfacematerial>
+</materialx>

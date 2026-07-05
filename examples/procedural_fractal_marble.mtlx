@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <fractal3d name="marble" type="color3" xpos="-3" ypos="0">
+    <input name="amplitude" type="vector3" value="0.35, 0.32, 0.3"/>
+    <input name="octaves" type="integer" value="4"/>
+  </fractal3d>
+  <standard_surface name="surface" type="surfaceshader" xpos="1" ypos="0">
+    <input name="base_color" type="color3" nodename="marble"/>
+    <input name="specular_roughness" type="float" value="0.2"/>
+  </standard_surface>
+  <surfacematerial name="ProceduralFractalMarble" type="material" xpos="5" ypos="0">
+    <input name="surfaceshader" type="surfaceshader" nodename="surface"/>
+  </surfacematerial>
+</materialx>

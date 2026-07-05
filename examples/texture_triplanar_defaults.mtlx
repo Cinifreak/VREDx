@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <triplanarprojection name="triplanar" type="color3" xpos="-3" ypos="0">
+    <input name="default" type="color3" value="0.55, 0.35, 0.2"/>
+    <input name="blend" type="float" value="0.8"/>
+  </triplanarprojection>
+  <standard_surface name="surface" type="surfaceshader" xpos="1" ypos="0">
+    <input name="base_color" type="color3" nodename="triplanar"/>
+  </standard_surface>
+  <surfacematerial name="TriplanarDefaults" type="material" xpos="5" ypos="0">
+    <input name="surfaceshader" type="surfaceshader" nodename="surface"/>
+  </surfacematerial>
+</materialx>

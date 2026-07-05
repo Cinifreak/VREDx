@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <constant name="base_tint" type="color3" xpos="-4" ypos="2">
+    <input name="value" type="color3" value="0.8, 0.8, 0.8"/>
+  </constant>
+  <geompropvalue name="vertex_ao" type="float" xpos="-4" ypos="0">
+    <input name="geomprop" type="string" value="vertex:ambientocclusion"/>
+    <input name="default" type="float" value="1.0"/>
+  </geompropvalue>
+  <multiply name="ao_multiply" type="color3" xpos="-1.5" ypos="1">
+    <input name="in1" type="color3" nodename="base_tint"/>
+    <input name="in2" type="float" nodename="vertex_ao"/>
+  </multiply>
+  <standard_surface name="surface" type="surfaceshader" xpos="1" ypos="0">
+    <input name="base_color" type="color3" nodename="ao_multiply"/>
+  </standard_surface>
+  <surfacematerial name="GeomPropDemo" type="material" xpos="4.5" ypos="0">
+    <input name="surfaceshader" type="surfaceshader" nodename="surface"/>
+  </surfacematerial>
+</materialx>

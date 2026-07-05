@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <image name="height_map" type="float" xpos="-4.5" ypos="0">
+    <input name="file" type="filename" value=""/>
+  </image>
+  <heighttonormal name="height_to_normal" type="vector3" xpos="-2" ypos="0">
+    <input name="in" type="float" nodename="height_map"/>
+  </heighttonormal>
+  <standard_surface name="surface" type="surfaceshader" xpos="1" ypos="0">
+    <input name="base_color" type="color3" value="0.6, 0.58, 0.55"/>
+    <input name="normal" type="vector3" nodename="height_to_normal"/>
+  </standard_surface>
+  <surfacematerial name="NormalFromHeight" type="material" xpos="5" ypos="0">
+    <input name="surfaceshader" type="surfaceshader" nodename="surface"/>
+  </surfacematerial>
+</materialx>

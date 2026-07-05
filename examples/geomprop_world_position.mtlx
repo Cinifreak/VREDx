@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <position name="world_pos" type="vector3" xpos="-4" ypos="0">
+    <input name="space" type="string" value="world"/>
+  </position>
+  <separate3 name="separate" type="float" xpos="-2" ypos="0">
+    <input name="in" type="vector3" nodename="world_pos"/>
+  </separate3>
+  <combine3 name="pos_to_color" type="color3">
+    <input name="in1" type="float" nodename="separate" output="outx"/>
+    <input name="in2" type="float" nodename="separate" output="outy"/>
+    <input name="in3" type="float" nodename="separate" output="outz"/>
+  </combine3>
+  <standard_surface name="surface" type="surfaceshader" xpos="2" ypos="0">
+    <input name="base_color" type="color3" nodename="pos_to_color"/>
+    <input name="metalness" type="float" value="0.0"/>
+  </standard_surface>
+  <surfacematerial name="GeomPropWorldPosition" type="material" xpos="5" ypos="0">
+    <input name="surfaceshader" type="surfaceshader" nodename="surface"/>
+  </surfacematerial>
+</materialx>

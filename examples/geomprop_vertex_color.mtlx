@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <geompropvalue name="vertex_color" type="color3" xpos="-3" ypos="0">
+    <input name="geomprop" type="string" value="vertex:color"/>
+    <input name="default" type="color3" value="0.8, 0.8, 0.8"/>
+  </geompropvalue>
+  <standard_surface name="surface" type="surfaceshader" xpos="1" ypos="0">
+    <input name="base_color" type="color3" nodename="vertex_color"/>
+  </standard_surface>
+  <surfacematerial name="GeomPropVertexColor" type="material" xpos="5" ypos="0">
+    <input name="surfaceshader" type="surfaceshader" nodename="surface"/>
+  </surfacematerial>
+</materialx>

@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <standard_surface name="surface" type="surfaceshader">
+    <input name="base_color" type="color3" value="0.95, 0.93, 0.88"/>
+    <input name="metalness" type="float" value="1.0"/>
+    <input name="specular_roughness" type="float" value="0.25"/>
+    <input name="specular_anisotropy" type="float" value="0.85"/>
+    <input name="specular_rotation" type="float" value="0.25"/>
+  </standard_surface>
+  <surfacematerial name="StandardSurfaceMetalAniso" type="material" xpos="5" ypos="0">
+    <input name="surfaceshader" type="surfaceshader" nodename="surface"/>
+  </surfacematerial>
+</materialx>

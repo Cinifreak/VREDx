@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<materialx version="1.39" colorspace="lin_rec709">
+  <constant name="color_a" type="color3" xpos="-4.5" ypos="-0.8">
+    <input name="value" type="color3" value="0.9, 0.1, 0.1"/>
+  </constant>
+  <constant name="color_b" type="color3" xpos="-4.5" ypos="0.8">
+    <input name="value" type="color3" value="0.1, 0.2, 0.9"/>
+  </constant>
+  <mix name="mix" type="color3" xpos="-2" ypos="0">
+    <input name="fg" type="color3" nodename="color_b"/>
+    <input name="bg" type="color3" nodename="color_a"/>
+    <input name="mix" type="float" value="0.35"/>
+  </mix>
+  <standard_surface name="surface" type="surfaceshader" xpos="1.5" ypos="0">
+    <input name="base_color" type="color3" nodename="mix"/>
+  </standard_surface>
+  <surfacematerial name="MathMixFloat" type="material" xpos="5" ypos="0">
+    <input name="surfaceshader" type="surfaceshader" nodename="surface"/>
+  </surfacematerial>
+</materialx>
