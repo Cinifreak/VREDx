@@ -3,6 +3,8 @@
 A VRED script plugin that adds a node-graph editor for **authoring, editing, and
 applying MaterialX materials** inside Autodesk VRED Pro.
 
+![VredX node editor in VRED](media/vredx_node_editor.png)
+
 ## Features
 
 - **Palette from your VRED install** — nodedef libraries are read from the same
