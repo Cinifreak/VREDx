@@ -5,8 +5,8 @@ __pycache__/
 venv/
 .pytest_cache/
 tests/
+install.py
 docs/*
-!docs/SUPPORT_MATRIX.md
 CHANGELOG.md
 resources/libraries/
 vredx.zip
