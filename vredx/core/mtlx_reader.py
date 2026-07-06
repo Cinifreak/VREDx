@@ -17,7 +17,7 @@ foreign or newer documents still open with warnings.
 import xml.etree.ElementTree as ET
 from typing import Dict, List, Optional, Tuple
 
-from . import mtlx_types
+from . import mtlx_paths, mtlx_types
 from .graph import Graph, Node, make_opaque_nodedef
 from .mtlx_writer import POSITION_SCALE
 from .nodedef_library import InputDef, NodeDefLibrary
@@ -64,6 +64,7 @@ def read_document(text: str, library: NodeDefLibrary,
     node_elems: List[Tuple[str, ET.Element, str]] = []  # (qual, elem, prefix)
     # nodegraph outputs: "ng/outname" -> (source qual name, source output)
     ng_outputs: Dict[str, Tuple[str, str]] = {}
+    had_editor_positions = False
 
     # Functional (nodedef-implementing) nodegraphs are library plumbing,
     # not scene content.  They are marked either by a nodedef attribute
@@ -93,10 +94,14 @@ def read_document(text: str, library: NodeDefLibrary,
                     continue
                 qual = "%s/%s" % (ng_name, child.get("name", ""))
                 node_elems.append((qual, child, ng_name))
+                if child.get("xpos") is not None or child.get("ypos") is not None:
+                    had_editor_positions = True
         elif tag in _NON_NODE_TAGS or tag is ET.Comment:
             continue
         else:
             node_elems.append((elem.get("name", ""), elem, ""))
+            if elem.get("xpos") is not None or elem.get("ypos") is not None:
+                had_editor_positions = True
 
     for qual, elem, _prefix in node_elems:
         node = _create_node(graph, elem, library, warnings)
@@ -121,6 +126,9 @@ def read_document(text: str, library: NodeDefLibrary,
                 continue
             _make_edge(graph, src_name, src_output, dst_name, input_name,
                        warnings)
+
+    if not had_editor_positions and len(graph.nodes) > 1:
+        mtlx_paths.auto_layout_nodes(graph)
 
     return ReadResult(graph, warnings)
 
