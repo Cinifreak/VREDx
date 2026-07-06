@@ -15,7 +15,7 @@ Zip-imported modules are invisible to the scanner.
 
 import os
 
-__version__ = "0.5.4"
+__version__ = "0.5.5"
 
 
 def plugin_root() -> str:

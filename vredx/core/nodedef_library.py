@@ -6,17 +6,16 @@ The node palette is generated from these files so that it exactly matches
 what the **local VRED installation** can compile.  Sources, in priority
 order:
 
-1. The VRED install that contains this plugin:
-   ``<VREDPro>/runtimeData/MaterialX/libraries``
+1. ``VRED_ROOT`` (set by VRED at runtime) →
+   ``runtimeData/MaterialX/libraries``
 2. The snapshot bundled with the plugin at ``VredX/resources/libraries``
-   (development and pytest only, when the plugin is not under a VRED tree)
+   (development and pytest only, when ``VRED_ROOT`` is unset)
 
 Only ``xml.etree`` is used - no PyMaterialX dependency.
 """
 
 import glob
 import os
-import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
@@ -108,7 +107,9 @@ class NodeDefLibrary:
         root = library_root or find_vred_library_root() or snapshot_root()
         if root is None or not os.path.isdir(root):
             raise FileNotFoundError(
-                "No MaterialX library folder found (VRED install or snapshot)")
+                "No MaterialX library folder found. Inside VRED, "
+                "VRED_ROOT must reference an install containing "
+                "runtimeData/MaterialX/libraries.")
         lib.source_root = root
         for path in _collect_def_files(root):
             lib._parse_file(path)
@@ -257,28 +258,24 @@ def _collect_def_files(root: str) -> List[str]:
 
 # --------------------------------------------------------------- discovery
 
-_VRED_INSTALL_RE = re.compile(r"^VREDPro-\d+\.\d+$", re.IGNORECASE)
+_MATERIALX_LIBRARIES = ("runtimeData", "MaterialX", "libraries")
 
 
 def vred_install_root() -> Optional[str]:
-    """VREDPro install folder containing this plugin, if installed under one."""
-    from .. import plugin_root
-
-    path = os.path.normpath(plugin_root())
-    parts = path.split(os.sep)
-    for index, part in enumerate(parts):
-        if _VRED_INSTALL_RE.match(part):
-            return os.sep.join(parts[: index + 1])
-    return None
+    """VRED install root from the ``VRED_ROOT`` environment variable."""
+    root = os.environ.get("VRED_ROOT", "").strip()
+    if not root:
+        return None
+    normalized = os.path.normpath(root)
+    return normalized if os.path.isdir(normalized) else None
 
 
 def find_vred_library_root() -> Optional[str]:
-    """MaterialX libraries from the VRED install that hosts this plugin."""
+    """MaterialX nodedef libraries for the VRED session hosting this plugin."""
     install = vred_install_root()
     if install is None:
         return None
-    candidate = os.path.join(
-        install, "runtimeData", "MaterialX", "libraries")
+    candidate = os.path.join(install, *_MATERIALX_LIBRARIES)
     return candidate if os.path.isdir(candidate) else None
 
 

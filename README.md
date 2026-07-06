@@ -7,8 +7,9 @@ applying MaterialX materials** inside Autodesk VRED Pro.
 
 ## Features
 
-- **Palette from your VRED install** — nodedef libraries are read from the same
-  `VREDPro-*` version that hosts the plugin (no cross-version conflicts)
+- **Palette from your VRED session** — nodedef libraries load from
+  `VRED_ROOT` (set by VRED at runtime), so the plugin works from Program
+  Files Scripts or Documents `ScriptPlugins`
 - **Node canvas** — typed ports, bezier wires, magnetic pin snapping, undo/redo
 - **VRED bridge** — Send to VRED, Send & Apply, optional Auto Update, preview swatch
 - **Validation** — type/cycle checks and VRED-specific warnings before send
@@ -23,21 +24,32 @@ applying MaterialX materials** inside Autodesk VRED Pro.
 ### GitHub Release (recommended)
 
 1. Download **VredX-x.y.z.zip** from [Releases](https://github.com/ScottRaffertyCG/VREDx/releases).
-2. Extract into your VRED Scripts folder (elevated prompt if VRED is under
-   Program Files):
+2. Extract into **either** install location below (match the version folder to
+   your VRED install, e.g. `VRED-19.1` / `VREDPro-19.1` for VRED 2027).
+3. Confirm the result is a `VredX\` folder containing `VredX.py` and
+   `vredx.zip` (no loose `vredx/` folder).
+4. Restart VRED, then open **VREDX** from the menu bar or Scripts panel.
+
+**Program Files** (machine-wide; elevated prompt if VRED is under Program Files):
 
 ```
 C:\Program Files\Autodesk\VREDPro-19.1\lib\plugins\WIN64\Scripts
 ```
 
-3. Confirm the result is `…\Scripts\VredX\` containing `VredX.py` and
-   `vredx.zip` (no loose `vredx/` folder).
-4. Restart VRED, then open **VREDX** from the menu bar or Scripts panel.
+**Documents ScriptPlugins** (per-user; no admin required):
+
+```
+C:\Users\<you>\Documents\Autodesk\VRED-19.1\ScriptPlugins
+```
+
+Both locations work. VredX loads its node palette from `VRED_ROOT` (set by
+VRED at runtime), not from the plugin folder path.
 
 ### From source
 
-Copy this repository into `…\Scripts\VredX`, then zip the `vredx/` folder to
-`vredx.zip` and delete the loose `vredx/` folder before starting VRED.
+Copy this repository into either location above as `VredX\`, then zip the
+`vredx/` folder to `vredx.zip` and delete the loose `vredx/` folder before
+starting VRED.
 
 **Do not leave loose `.py` files under `vredx/`.** VRED's plugin scanner executes
 every loose `.py` file it finds. The zip keeps the library importable via
@@ -112,7 +124,8 @@ Sample materials in `examples/` — open from **Examples** in the editor menu:
 2. That entry point adds `vredx.zip` to `sys.path` and imports the `vredx` package.
 3. `VredXPlugin` creates the dockable UI and registers the **VREDX** menu.
 4. MaterialX nodedefs are loaded from
-   `<VREDPro>/runtimeData/MaterialX/libraries` (the hosting install only).
+   `<VRED_ROOT>/runtimeData/MaterialX/libraries` (provided by the running
+   VRED session).
 
 Without the zip packaging, dozens of loose `.py` files under `vredx/` would each
 be executed by VRED at startup — slow, noisy, and broken for relative imports.
