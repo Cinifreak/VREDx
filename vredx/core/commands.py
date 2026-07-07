@@ -198,23 +198,32 @@ class SetValueCommand(Command):
 
 
 class SetExposeCommand(Command):
-    """Toggle whether a node appears in VRED's Realistic material editor."""
+    """Toggle whether nodes appear in VRED's Realistic material editor."""
 
-    def __init__(self, graph: Graph, node_name: str, exposed: bool):
+    def __init__(self, graph: Graph, node_names, exposed: bool):
         self.graph = graph
-        self.node_name = node_name
+        if isinstance(node_names, str):
+            node_names = [node_names]
+        self.node_names = list(node_names)
         self.new_exposed = exposed
-        self._old_exposed = False
-        self.label = "%s %s in material" % (
-            "Expose" if exposed else "Hide", node_name)
+        self._old_exposed = {}
+        if len(self.node_names) == 1:
+            self.label = "%s %s in material" % (
+                "Expose" if exposed else "Hide", self.node_names[0])
+        else:
+            self.label = "%s %d nodes in material" % (
+                "Expose" if exposed else "Hide", len(self.node_names))
 
     def redo(self):
-        node = self.graph.node(self.node_name)
-        self._old_exposed = node.expose_in_material
-        node.expose_in_material = self.new_exposed
+        for name in self.node_names:
+            node = self.graph.node(name)
+            if name not in self._old_exposed:
+                self._old_exposed[name] = node.expose_in_material
+            node.expose_in_material = self.new_exposed
 
     def undo(self):
-        self.graph.node(self.node_name).expose_in_material = self._old_exposed
+        for name, old in self._old_exposed.items():
+            self.graph.node(name).expose_in_material = old
 
 
 class MoveNodesCommand(Command):

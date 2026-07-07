@@ -87,7 +87,9 @@ class NodeGraphScene(QtWidgets.QGraphicsScene):
 
         for name in selected:
             if name in self.node_items:
-                self.node_items[name].setSelected(True)
+                item = self.node_items[name]
+                if not item.isSelected():
+                    item.setSelected(True)
         self.update()
 
     def _rebuild_edges(self):
@@ -142,6 +144,7 @@ class NodeGraphScene(QtWidgets.QGraphicsScene):
                 position=(node.position[0] + 40, node.position[1] + 40))
             self.stack.push(cmd)
             cmd.node.values.update(node.values)
+            cmd.node.expose_in_material = node.expose_in_material
             new_names.append(cmd.node.name)
         self.clearSelection()
         for name in new_names:

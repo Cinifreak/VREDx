@@ -319,11 +319,28 @@ def infer_expose_in_material(node: Node, graph: Graph) -> bool:
         return False
     connected = connected_inputs(graph, node.name)
     written = [name for name in material_ui_inputs(node, connected)
-               if name in node.values]
+               if name in node.values or name in node.input_attrs]
     if not written:
         return False
     return any(node.input_attrs.get(name, {}).get("uivisible") != "false"
                for name in written)
+
+
+def expose_check_state(nodes, graph):
+    """Check-state label for a selection's expose-in-material toggle.
+
+    Returns ``None`` when no selected node supports the toggle, otherwise
+    one of ``"checked"``, ``"unchecked"``, or ``"partial"``.
+    """
+    targets = [n for n in nodes if can_expose_in_material(n, graph)]
+    if not targets:
+        return None
+    states = [n.expose_in_material for n in targets]
+    if all(states):
+        return "checked"
+    if not any(states):
+        return "unchecked"
+    return "partial"
 
 
 def sync_expose_in_material(graph: Graph) -> None:

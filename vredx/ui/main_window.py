@@ -319,6 +319,7 @@ class VredXWindow(QtWidgets.QWidget):
         return menu
 
     def _connect(self):
+        self._inspector_selection = []
         self.scene.selectionChanged.connect(self._on_selection)
         self.scene.graph_changed.connect(self._on_graph_changed)
         self.scene.node_double_clicked.connect(self._focus_inspector)
@@ -529,38 +530,46 @@ class VredXWindow(QtWidgets.QWidget):
 
     def _refresh_inspector_after_graph_change(self, prior):
         """Keep the inspector in sync after preset/open/new document."""
+        selected = [self.graph.nodes[n] for n in (prior.get("names") or [])
+                    if n in self.graph.nodes]
         node = None
-        for name in prior.get("names") or []:
-            candidate = self.graph.nodes.get(name)
-            if candidate is not None:
-                node = candidate
-                break
-        if node is None and prior.get("category"):
-            for candidate in self.graph.nodes.values():
-                if candidate.category == prior["category"]:
+        if selected:
+            node = selected[0]
+        else:
+            for name in prior.get("names") or []:
+                candidate = self.graph.nodes.get(name)
+                if candidate is not None:
                     node = candidate
                     break
-        if node is None and prior.get("nodedef"):
-            for candidate in self.graph.nodes.values():
-                if candidate.nodedef.name == prior["nodedef"]:
-                    node = candidate
-                    break
-        if node is None and prior.get("names"):
-            for category in ("standard_surface", "open_pbr_surface",
-                             "UsdPreviewSurface", "gltf_pbr",
-                             "disney_principled"):
+            if node is None and prior.get("category"):
                 for candidate in self.graph.nodes.values():
-                    if candidate.category == category:
+                    if candidate.category == prior["category"]:
                         node = candidate
                         break
-                if node is not None:
-                    break
-        self.inspector.show_node(self.graph, node)
-        if node is not None:
+            if node is None and prior.get("nodedef"):
+                for candidate in self.graph.nodes.values():
+                    if candidate.nodedef.name == prior["nodedef"]:
+                        node = candidate
+                        break
+            if node is None and prior.get("names"):
+                for category in ("standard_surface", "open_pbr_surface",
+                                 "UsdPreviewSurface", "gltf_pbr",
+                                 "disney_principled"):
+                    for candidate in self.graph.nodes.values():
+                        if candidate.category == category:
+                            node = candidate
+                            break
+                    if node is not None:
+                        break
+            selected = [node] if node is not None else []
+        self._inspector_selection = sorted(n.name for n in selected)
+        self.inspector.show_selection(self.graph, selected)
+        if selected:
             self.scene.clearSelection()
-            item = self.scene.node_items.get(node.name)
-            if item is not None:
-                item.setSelected(True)
+            for n in selected:
+                item = self.scene.node_items.get(n.name)
+                if item is not None:
+                    item.setSelected(True)
 
     # -------------------------------------------------------------- VRED
 
@@ -707,11 +716,15 @@ class VredXWindow(QtWidgets.QWidget):
         # Do not rebuild the inspector here: slider drags fire graph_changed
         # on every tick; destroying/recreating editor widgets mid-drag has
         # caused VRED crashes when the material is live on geometry.
+        self.inspector.sync_expose_checkbox()
 
     def _on_selection(self):
-        names = self.scene.selected_node_names()
-        node = self.graph.nodes.get(names[0]) if names else None
-        self.inspector.show_node(self.graph, node)
+        names = sorted(self.scene.selected_node_names())
+        if names == self._inspector_selection:
+            return
+        self._inspector_selection = names
+        nodes = [self.graph.nodes[n] for n in names if n in self.graph.nodes]
+        self.inspector.show_selection(self.graph, nodes)
 
     def _focus_inspector(self, node_name):
         self.tabs.setCurrentWidget(self.inspector)

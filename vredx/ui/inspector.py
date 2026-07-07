@@ -13,7 +13,7 @@ from functools import partial
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from ..core import commands, mtlx_types
-from ..core.graph import can_expose_in_material
+from ..core.graph import can_expose_in_material, expose_check_state
 from .color_dialog import pick_color
 
 
@@ -182,6 +182,9 @@ class InspectorPanel(QtWidgets.QWidget):
         self.stack = stack
         self.graph = None
         self.node = None
+        self.nodes = []
+        self._expose_targets = []
+        self._expose_checkbox = None
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -213,13 +216,55 @@ class InspectorPanel(QtWidgets.QWidget):
         self.material_name.blockSignals(False)
 
     def show_node(self, graph, node):
+        """Show one node, or a placeholder when *node* is None."""
+        nodes = [node] if node is not None else []
+        self.show_selection(graph, nodes)
+
+    def show_selection(self, graph, nodes):
         self.graph = graph
+        self.nodes = list(nodes or [])
+        self.node = self.nodes[0] if len(self.nodes) == 1 else None
+        self._expose_targets = []
+        self._expose_checkbox = None
         if graph is not None:
             self.set_material_name(graph.name)
-        self.node = node
-        if node is None:
+        if not self.nodes:
             self._placeholder()
             return
+        if len(self.nodes) == 1:
+            self._build_single_node_panel(self.nodes[0])
+        else:
+            self._build_multi_node_panel(self.nodes)
+
+    def _build_multi_node_panel(self, nodes):
+        container = QtWidgets.QWidget()
+        container.setObjectName("VredXRoot")
+        outer = QtWidgets.QVBoxLayout(container)
+        outer.setContentsMargins(6, 6, 6, 6)
+        outer.setSpacing(6)
+
+        name_row = QtWidgets.QHBoxLayout()
+        name_row.setContentsMargins(0, 0, 0, 0)
+        name_label = QtWidgets.QLabel(
+            "<b>%d nodes selected</b>" % len(nodes))
+        name_label.setTextFormat(QtCore.Qt.RichText)
+        name_row.addWidget(name_label, 1)
+        self._add_expose_checkbox(name_row, nodes)
+        name_widget = QtWidgets.QWidget()
+        name_widget.setLayout(name_row)
+        outer.addWidget(name_widget)
+
+        names = QtWidgets.QLabel(
+            "<span style='color:#9a9a9f'>%s</span>"
+            % html.escape(", ".join(n.name for n in nodes)))
+        names.setTextFormat(QtCore.Qt.RichText)
+        names.setWordWrap(True)
+        outer.addWidget(names)
+        outer.addStretch(1)
+        self.scroll.setWidget(container)
+
+    def _build_single_node_panel(self, node):
+        graph = self.graph
         container = QtWidgets.QWidget()
         container.setObjectName("VredXRoot")
         outer = QtWidgets.QVBoxLayout(container)
@@ -231,13 +276,7 @@ class InspectorPanel(QtWidgets.QWidget):
         name_label = QtWidgets.QLabel("<b>%s</b>" % html.escape(node.name))
         name_label.setTextFormat(QtCore.Qt.RichText)
         name_row.addWidget(name_label, 1)
-        if can_expose_in_material(node, graph):
-            expose = QtWidgets.QCheckBox("Expose in material")
-            expose.setChecked(node.expose_in_material)
-            expose.setToolTip(
-                "Show this node in VRED's Realistic material editor.")
-            expose.toggled.connect(self._commit_expose)
-            name_row.addWidget(expose, 0, QtCore.Qt.AlignRight)
+        self._add_expose_checkbox(name_row, [node])
         name_widget = QtWidgets.QWidget()
         name_widget.setLayout(name_row)
         outer.addWidget(name_widget)
@@ -279,6 +318,44 @@ class InspectorPanel(QtWidgets.QWidget):
 
         outer.addStretch(1)
         self.scroll.setWidget(container)
+
+    def _add_expose_checkbox(self, layout, nodes):
+        self._expose_targets = [
+            n for n in nodes if can_expose_in_material(n, self.graph)]
+        state = expose_check_state(nodes, self.graph)
+        if state is None:
+            return
+        expose = QtWidgets.QCheckBox("Expose in material")
+        expose.setTristate(len(nodes) > 1)
+        expose.setToolTip(
+            "Show selected node(s) in VRED's Realistic material editor.")
+        expose.blockSignals(True)
+        if state == "checked":
+            expose.setCheckState(QtCore.Qt.Checked)
+        elif state == "partial":
+            expose.setCheckState(QtCore.Qt.PartiallyChecked)
+        else:
+            expose.setCheckState(QtCore.Qt.Unchecked)
+        expose.blockSignals(False)
+        expose.stateChanged.connect(self._commit_expose_state)
+        self._expose_checkbox = expose
+        layout.addWidget(expose, 0, QtCore.Qt.AlignRight)
+
+    def sync_expose_checkbox(self):
+        """Refresh the expose toggle after undo/redo without rebuilding."""
+        if self._expose_checkbox is None or not self.nodes:
+            return
+        state = expose_check_state(self.nodes, self.graph)
+        if state is None:
+            return
+        self._expose_checkbox.blockSignals(True)
+        if state == "checked":
+            self._expose_checkbox.setCheckState(QtCore.Qt.Checked)
+        elif state == "partial":
+            self._expose_checkbox.setCheckState(QtCore.Qt.PartiallyChecked)
+        else:
+            self._expose_checkbox.setCheckState(QtCore.Qt.Unchecked)
+        self._expose_checkbox.blockSignals(False)
 
     # -------------------------------------------------------------- editors
 
@@ -361,11 +438,22 @@ class InspectorPanel(QtWidgets.QWidget):
         self.stack.push(commands.SetValueCommand(
             self.graph, self.node.name, input_name, value))
 
-    def _commit_expose(self, exposed):
-        if self.node is None:
+    def _commit_expose_state(self, state):
+        if state == QtCore.Qt.PartiallyChecked or not self._expose_targets:
+            return
+        exposed = state == QtCore.Qt.Checked
+        names = [n.name for n in self._expose_targets]
+        # Defer the undo step until Qt finishes the click handler.  Pushing
+        # during QAbstractButton::click rebuilds the inspector (via scene
+        # sync + selectionChanged) and has crashed VRED in QAccessible code.
+        QtCore.QTimer.singleShot(
+            0, lambda: self._push_expose_command(names, exposed))
+
+    def _push_expose_command(self, names, exposed):
+        if self.graph is None:
             return
         self.stack.push(commands.SetExposeCommand(
-            self.graph, self.node.name, exposed))
+            self.graph, names, exposed))
 
     def _commit_merged(self, input_name, value):
         if self.node is None:

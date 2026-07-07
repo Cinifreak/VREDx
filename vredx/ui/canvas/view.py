@@ -17,6 +17,8 @@ class NodeGraphView(QtWidgets.QGraphicsView):
         self.setRenderHints(QtGui.QPainter.Antialiasing |
                             QtGui.QPainter.TextAntialiasing)
         self.setDragMode(QtWidgets.QGraphicsView.RubberBandDrag)
+        self.setRubberBandSelectionMode(
+            QtCore.Qt.ItemSelectionMode.IntersectsItemShape)
         self.setTransformationAnchor(
             QtWidgets.QGraphicsView.AnchorUnderMouse)
         self.setResizeAnchor(QtWidgets.QGraphicsView.AnchorViewCenter)
@@ -211,14 +213,22 @@ class QuickAddDialog(QtWidgets.QDialog):
         text = text.lower().strip()
         self.list.clear()
         for node_name in self.library.node_names():
-            if text and text not in node_name.lower():
+            all_variants = self.library.variants(node_name)
+            if text:
+                if text in node_name.lower():
+                    variants = all_variants
+                else:
+                    variants = [nd for nd in all_variants
+                                if nd.matches_filter(text, node_name)]
+            else:
+                variants = all_variants
+            if not variants:
                 continue
-            for nd in self.library.variants(node_name):
+            for nd in variants:
                 item = QtWidgets.QListWidgetItem(
-                    "%s  (%s)" % (node_name, nd.output_type))
+                    "%s  (%s)" % (node_name, nd.type_signature()))
                 item.setData(QtCore.Qt.UserRole, nd.name)
-                if nd.doc:
-                    item.setToolTip(nd.doc)
+                item.setToolTip(nd.palette_tooltip())
                 self.list.addItem(item)
         if self.list.count():
             self.list.setCurrentRow(0)

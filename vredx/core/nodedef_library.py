@@ -22,6 +22,9 @@ from typing import Dict, List, Optional, Tuple
 
 from . import mtlx_types
 
+# Input types that are configuration metadata, not stream connections.
+_CONFIG_INPUT_TYPES = frozenset({"string", "filename", "geomname"})
+
 # Library files that define nodes usable in an authored document.  The
 # generator implementation files (*_impl.mtlx) and target defs are skipped.
 _DEF_FILE_PATTERNS = (
@@ -76,6 +79,77 @@ class NodeDef:
     @property
     def output_type(self) -> str:
         return self.outputs[0].type if self.outputs else "none"
+
+    def connection_input_types(self) -> Tuple[str, ...]:
+        """Distinct connectable input types, in declaration order."""
+        seen = set()
+        types: List[str] = []
+        for idef in self.inputs:
+            if idef.type in _CONFIG_INPUT_TYPES:
+                continue
+            if idef.type in seen:
+                continue
+            seen.add(idef.type)
+            types.append(idef.type)
+        return tuple(types)
+
+    def type_signature(self) -> str:
+        """Compact label for type variants, e.g. ``float → vector3``."""
+        out = self.output_type
+        ins = self.connection_input_types()
+        if len(ins) == 1:
+            return "%s → %s" % (ins[0], out)
+        if ins:
+            return "%s → %s" % (" + ".join(ins), out)
+        return out
+
+    def search_haystack(self, node_name: str = "") -> str:
+        """Lowercase text used for palette / quick-add filtering."""
+        parts = [
+            node_name or self.node,
+            self.node,
+            self.name,
+            self.doc,
+            self.output_type,
+            self.type_signature(),
+        ]
+        parts.extend(self.connection_input_types())
+        return " ".join(p for p in parts if p).lower()
+
+    def matches_filter(self, filter_text: str, node_name: str = "") -> bool:
+        """True when filter tokens match this variant.
+
+        A single token may appear anywhere in the haystack.  Two or more
+        type tokens are interpreted as ``input → output`` in the order typed
+        (e.g. ``float vector3`` matches float-to-vector3 converts only).
+        """
+        if not filter_text:
+            return True
+        haystack = self.search_haystack(node_name)
+        tokens = filter_text.lower().split()
+        ins = set(self.connection_input_types())
+        outs = {self.output_type}
+        port_types = ins | outs
+        type_tokens = [t for t in tokens if t in port_types]
+        other_tokens = [t for t in tokens if t not in port_types]
+        if len(type_tokens) >= 2:
+            t_in, t_out = type_tokens[0], type_tokens[1]
+            if not (t_in in ins and t_out in outs):
+                return False
+            return all(t in haystack for t in other_tokens)
+        return all(token in haystack for token in tokens)
+
+    def palette_tooltip(self) -> str:
+        """Multi-line tooltip for palette and quick-add entries."""
+        lines = [self.doc or self.node]
+        ins = self.connection_input_types()
+        if len(ins) == 1:
+            lines.append("input: %s" % ins[0])
+        elif ins:
+            lines.append("inputs: %s" % ", ".join(ins))
+        lines.append("output: %s" % self.output_type)
+        lines.append("library: %s" % self.library)
+        return "\n".join(lines)
 
     def find_input(self, name: str) -> Optional[InputDef]:
         for i in self.inputs:

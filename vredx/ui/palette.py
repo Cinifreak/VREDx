@@ -116,7 +116,7 @@ class PalettePanel(QtWidgets.QWidget):
         shown = 0
         for group in ordered:
             nodes = [n for n in groups[group]
-                     if not filter_text or filter_text in n.lower()]
+                     if self._node_visible(n, filter_text)]
             if not nodes:
                 continue
             group_item = QtWidgets.QTreeWidgetItem(
@@ -128,12 +128,19 @@ class PalettePanel(QtWidgets.QWidget):
             self.tree.addTopLevelItem(group_item)
 
             for node_name in nodes:
-                variants = self.library.variants(node_name)
+                all_variants = self.library.variants(node_name)
+                if not all_variants:
+                    continue
+                variants = self._filtered_variants(
+                    node_name, all_variants, filter_text)
                 if not variants:
                     continue
                 shown += 1
-                if len(variants) == 1:
+                if len(all_variants) == 1:
                     self._add_leaf(group_item, node_name, variants[0])
+                elif len(variants) == 1 and filter_text:
+                    label = "%s  (%s)" % (node_name, variants[0].type_signature())
+                    self._add_leaf(group_item, label, variants[0])
                 else:
                     parent = QtWidgets.QTreeWidgetItem([node_name])
                     # Default drag: first variant.
@@ -142,7 +149,7 @@ class PalettePanel(QtWidgets.QWidget):
                                     QtCore.Qt.ItemIsDragEnabled)
                     group_item.addChild(parent)
                     for nd in variants:
-                        self._add_leaf(parent, nd.output_type, nd)
+                        self._add_leaf(parent, nd.type_signature(), nd)
 
             group_item.setExpanded(bool(filter_text))
 
@@ -151,11 +158,25 @@ class PalettePanel(QtWidgets.QWidget):
         if filter_text:
             self.tree.expandAll()
 
+    def _node_visible(self, node_name, filter_text):
+        if not filter_text:
+            return True
+        if filter_text in node_name.lower():
+            return True
+        return any(nd.matches_filter(filter_text, node_name)
+                   for nd in self.library.variants(node_name))
+
+    def _filtered_variants(self, node_name, all_variants, filter_text):
+        if not filter_text:
+            return all_variants
+        if filter_text in node_name.lower():
+            return all_variants
+        return [nd for nd in all_variants
+                if nd.matches_filter(filter_text, node_name)]
+
     def _add_leaf(self, parent_item, label, nodedef):
         item = QtWidgets.QTreeWidgetItem([label])
         item.setData(0, QtCore.Qt.UserRole, nodedef.name)
         item.setFlags(item.flags() | QtCore.Qt.ItemIsDragEnabled)
-        tooltip = nodedef.doc or nodedef.node
-        item.setToolTip(0, "%s\nlibrary: %s\noutput: %s" %
-                        (tooltip, nodedef.library, nodedef.output_type))
+        item.setToolTip(0, nodedef.palette_tooltip())
         parent_item.addChild(item)
