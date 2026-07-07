@@ -185,6 +185,8 @@ class InspectorPanel(QtWidgets.QWidget):
         self.nodes = []
         self._expose_targets = []
         self._expose_checkbox = None
+        self._dissolve_callback = None
+        self.active_scope = None
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -209,20 +211,24 @@ class InspectorPanel(QtWidgets.QWidget):
 
     # --------------------------------------------------------------- public
 
+    def set_dissolve_callback(self, callback):
+        self._dissolve_callback = callback
+
     def set_material_name(self, name):
         """Sync the material name field without triggering edits."""
         self.material_name.blockSignals(True)
         self.material_name.setText(name or "")
         self.material_name.blockSignals(False)
 
-    def show_node(self, graph, node):
+    def show_node(self, graph, node, active_scope=None):
         """Show one node, or a placeholder when *node* is None."""
         nodes = [node] if node is not None else []
-        self.show_selection(graph, nodes)
+        self.show_selection(graph, nodes, active_scope=active_scope)
 
-    def show_selection(self, graph, nodes):
+    def show_selection(self, graph, nodes, active_scope=None):
         self.graph = graph
         self.nodes = list(nodes or [])
+        self.active_scope = active_scope
         self.node = self.nodes[0] if len(self.nodes) == 1 else None
         self._expose_targets = []
         self._expose_checkbox = None
@@ -286,6 +292,18 @@ class InspectorPanel(QtWidgets.QWidget):
             % (html.escape(node.category), html.escape(node.nodedef.library)))
         subtitle.setTextFormat(QtCore.Qt.RichText)
         outer.addWidget(subtitle)
+
+        if self.active_scope and node.compound != self.active_scope:
+            scope_hint = QtWidgets.QLabel(
+                "This node lives outside the nested graph you are viewing.")
+            scope_hint.setWordWrap(True)
+            scope_hint.setStyleSheet("color: #c9a227;")
+            outer.addWidget(scope_hint)
+        elif self._can_author_compound_exports(node):
+            self._build_compound_export_section(container, node)
+        elif self._can_manage_compound_proxy(node):
+            self._build_compound_proxy_section(container, node)
+
         if node.nodedef.doc:
             doc = QtWidgets.QLabel(node.nodedef.doc)
             doc.setWordWrap(True)
@@ -328,7 +346,8 @@ class InspectorPanel(QtWidgets.QWidget):
         expose = QtWidgets.QCheckBox("Expose in material")
         expose.setTristate(len(nodes) > 1)
         expose.setToolTip(
-            "Show selected node(s) in VRED's Realistic material editor.")
+            "Show selected node(s) in VRED's Realistic material editor. "
+            "Works for nodes inside nested nodegraphs too.")
         expose.blockSignals(True)
         if state == "checked":
             expose.setCheckState(QtCore.Qt.Checked)
@@ -356,6 +375,172 @@ class InspectorPanel(QtWidgets.QWidget):
         else:
             self._expose_checkbox.setCheckState(QtCore.Qt.Unchecked)
         self._expose_checkbox.blockSignals(False)
+
+    def _can_author_compound_exports(self, node):
+        return (self.active_scope
+                and node.compound == self.active_scope
+                and not node.is_compound
+                and self.active_scope in self.graph.compounds)
+
+    def _can_manage_compound_proxy(self, node):
+        return (self.active_scope is None
+                and node.is_compound
+                and node.name in self.graph.compounds)
+
+    def _build_compound_proxy_section(self, parent, node):
+        compound = node.name
+        box = QtWidgets.QGroupBox("Graph outputs", parent)
+        layout = QtWidgets.QVBoxLayout(box)
+        layout.setContentsMargins(8, 4, 8, 8)
+        layout.setSpacing(6)
+
+        hint = QtWidgets.QLabel(
+            "Double-click this group node to open the nested graph, "
+            "then right-click an internal node and choose "
+            "<b>Add graph output\u2026</b>.")
+        hint.setWordWrap(True)
+        hint.setTextFormat(QtCore.Qt.RichText)
+        hint.setStyleSheet("color: #9a9a9f;")
+        layout.addWidget(hint)
+
+        outputs = self.graph.compounds.get(compound, ())
+        if outputs:
+            for output in outputs:
+                row = QtWidgets.QHBoxLayout()
+                text = QtWidgets.QLabel(
+                    "<span style='color:#96be76'>%s</span>"
+                    " <span style='color:#9a9a9f'>(%s · %s → %s)</span>"
+                    % (html.escape(output.name),
+                       html.escape(output.type),
+                       html.escape(output.internal_node),
+                       html.escape(output.internal_output)))
+                text.setTextFormat(QtCore.Qt.RichText)
+                row.addWidget(text, 1)
+                remove = QtWidgets.QPushButton("Remove")
+                remove.clicked.connect(
+                    partial(self._remove_compound_output, output.name))
+                row.addWidget(remove)
+                wrap = QtWidgets.QWidget()
+                wrap.setLayout(row)
+                layout.addWidget(wrap)
+        else:
+            empty = QtWidgets.QLabel("No outputs exported yet.")
+            empty.setStyleSheet("color: #9a9a9f;")
+            layout.addWidget(empty)
+
+        dissolve = QtWidgets.QPushButton("Dissolve compound graph")
+        dissolve.setToolTip(
+            "Move all internal nodes back to the root graph and remove "
+            "this group node.")
+        dissolve.clicked.connect(
+            partial(self._request_dissolve_compound, compound))
+        layout.addWidget(dissolve)
+        parent.layout().addWidget(box)
+
+    def _build_compound_export_section(self, parent, node):
+        compound = self.active_scope
+        box = QtWidgets.QGroupBox("Graph outputs", parent)
+        layout = QtWidgets.QVBoxLayout(box)
+        layout.setContentsMargins(8, 4, 8, 8)
+        layout.setSpacing(6)
+
+        hint = QtWidgets.QLabel(
+            "Expose this node's output on the parent group node, or use "
+            "right-click \u2192 <b>Add graph output\u2026</b>.")
+        hint.setWordWrap(True)
+        hint.setTextFormat(QtCore.Qt.RichText)
+        hint.setStyleSheet("color: #9a9a9f;")
+        layout.addWidget(hint)
+
+        existing = [o for o in self.graph.compounds.get(compound, ())
+                    if o.internal_node == node.name]
+        if existing:
+            for output in existing:
+                row = QtWidgets.QHBoxLayout()
+                text = QtWidgets.QLabel(
+                    "<span style='color:#96be76'>%s</span>"
+                    " <span style='color:#9a9a9f'>(%s · %s)</span>"
+                    % (html.escape(output.name),
+                       html.escape(output.internal_output),
+                       html.escape(output.type)))
+                text.setTextFormat(QtCore.Qt.RichText)
+                row.addWidget(text, 1)
+                remove = QtWidgets.QPushButton("Remove")
+                remove.clicked.connect(
+                    partial(self._remove_compound_output, output.name))
+                row.addWidget(remove)
+                wrap = QtWidgets.QWidget()
+                wrap.setLayout(row)
+                layout.addWidget(wrap)
+        else:
+            hint = QtWidgets.QLabel(
+                "This node is not exported from the nested graph yet.")
+            hint.setWordWrap(True)
+            hint.setStyleSheet("color: #9a9a9f;")
+            layout.addWidget(hint)
+
+        form = QtWidgets.QFormLayout()
+        form.setLabelAlignment(QtCore.Qt.AlignRight)
+        outputs = list(node.nodedef.outputs)
+        if len(outputs) > 1:
+            port_combo = QtWidgets.QComboBox()
+            for odef in outputs:
+                port_combo.addItem("%s (%s)" % (odef.name, odef.type), odef.name)
+            form.addRow("Port", port_combo)
+        else:
+            port_combo = None
+            default_port = outputs[0].name if outputs else "out"
+            form.addRow("Port", QtWidgets.QLabel(default_port))
+
+        default_name = self.graph.unique_compound_output_name(
+            compound, "%s_output" % node.name)
+        name_edit = QtWidgets.QLineEdit(default_name)
+        form.addRow("Output name", name_edit)
+        layout.addLayout(form)
+
+        add = QtWidgets.QPushButton("Add graph output")
+        add.setToolTip(
+            "Expose this node's output on the compound group node at the "
+            "parent graph level.")
+        add.clicked.connect(
+            partial(self._add_compound_output, port_combo, name_edit))
+        layout.addWidget(add)
+        parent.layout().addWidget(box)
+
+    def _request_dissolve_compound(self, compound_name):
+        if self._dissolve_callback is not None:
+            self._dissolve_callback(compound_name)
+
+    def _add_compound_output(self, port_combo, name_edit):
+        if self.node is None or not self.active_scope:
+            return
+        name = name_edit.text().strip()
+        if not name:
+            return
+        if port_combo is not None:
+            port = port_combo.currentData()
+        else:
+            port = self.node.nodedef.outputs[0].name
+        self.stack.push(commands.AddCompoundOutputCommand(
+            self.graph, self.active_scope, name,
+            self.node.name, port))
+        QtCore.QTimer.singleShot(
+            0, lambda: self.show_selection(
+                self.graph, [self.node], self.active_scope))
+
+    def _remove_compound_output(self, output_name):
+        compound = self.active_scope or (
+            self.node.name if self.node and self.node.is_compound else None)
+        if not compound:
+            return
+        node = self.node
+        self.stack.push(commands.RemoveCompoundOutputCommand(
+            self.graph, compound, output_name))
+        if node is not None:
+            QtCore.QTimer.singleShot(
+                0, lambda: self.show_selection(
+                    self.graph, [node],
+                    active_scope=self.active_scope))
 
     # -------------------------------------------------------------- editors
 

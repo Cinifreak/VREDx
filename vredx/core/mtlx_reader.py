@@ -127,8 +127,6 @@ def read_document(text: str, library: NodeDefLibrary,
 
     for ng_name in compound_names:
         outputs = _compound_outputs(graph, ng_name, ng_outputs, name_map)
-        if not outputs:
-            continue
         graph.compounds[ng_name] = outputs
         proxy = graph.add_node(
             make_compound_nodedef(ng_name, outputs),

@@ -4,6 +4,7 @@
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from .node_item import NodeItem
 from .scene import NodeGraphScene
 
 ZOOM_MIN = 0.15
@@ -168,8 +169,55 @@ class NodeGraphView(QtWidgets.QGraphicsView):
     # ----------------------------------------------------------- quick add
 
     def contextMenuEvent(self, event):
-        self.show_quick_add(event.globalPos(),
-                            self.mapToScene(event.pos()))
+        scene = self.graph_scene()
+        scene_pos = self.mapToScene(event.pos())
+        item = scene.itemAt(scene_pos, QtGui.QTransform())
+        while item is not None and not isinstance(item, NodeItem):
+            item = item.parentItem()
+
+        selected = scene.selected_node_names()
+        if item is not None and isinstance(item, NodeItem):
+            if item.node_name not in selected:
+                selected = [item.node_name]
+        menu = QtWidgets.QMenu(self)
+
+        if scene.active_scope and len(selected) == 1:
+            node = scene.graph.nodes.get(selected[0])
+            if (node is not None and node.compound == scene.active_scope
+                    and not node.is_compound):
+                action = menu.addAction("Add graph output\u2026")
+                action.triggered.connect(
+                    lambda _checked=False, n=selected[0]:
+                    scene.add_graph_output_requested.emit(n))
+
+        if scene.active_scope is None and len(selected) >= 2:
+            members = []
+            for name in selected:
+                node = scene.graph.nodes.get(name)
+                if node is None or node.is_compound or node.compound is not None:
+                    continue
+                members.append(name)
+            if len(members) >= 2:
+                action = menu.addAction("Create compound graph\u2026")
+                action.triggered.connect(
+                    lambda _checked=False, m=members:
+                    scene.create_compound_requested.emit(m))
+
+        if scene.active_scope is None and len(selected) == 1:
+            node = scene.graph.nodes.get(selected[0])
+            if node is not None and node.is_compound:
+                action = menu.addAction("Dissolve compound graph")
+                action.triggered.connect(
+                    lambda _checked=False, n=selected[0]:
+                    scene.dissolve_compound_requested.emit(n))
+
+        if not menu.isEmpty():
+            menu.addSeparator()
+            menu.addAction("Add node\u2026", lambda: self.show_quick_add(
+                event.globalPos(), scene_pos))
+            menu.exec(event.globalPos())
+        else:
+            self.show_quick_add(event.globalPos(), scene_pos)
 
     def _port_at_view_pos(self, view_pos):
         return self.graph_scene()._port_at(

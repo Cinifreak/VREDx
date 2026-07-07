@@ -16,8 +16,7 @@ from typing import List
 
 from PySide6 import QtCore, QtWidgets
 
-from ..core import validator
-from ..core.commands import CommandStack
+from ..core import commands, validator
 from ..core.graph import Graph
 from ..core import mtlx_archive, mtlx_reader, mtlx_writer
 from ..vredbridge import vred_api
@@ -60,6 +59,20 @@ class _MenubarCornerHeightSync(QtCore.QObject):
             self._corner.setFixedHeight(height)
 
 
+class VredXFloatingShell(QtWidgets.QMainWindow):
+    """Top-level shell so the editor can be minimized like a normal window."""
+
+    def __init__(self, editor):
+        super().__init__(None)
+        self._editor = editor
+        self.setObjectName("VredXRoot")
+        self.setWindowTitle(editor.windowTitle())
+        self.setWindowIcon(editor.windowIcon())
+        self.setMinimumSize(1100, 640)
+        self.setCentralWidget(editor)
+        style.apply_vred_appearance(self)
+
+
 class VredXWindow(QtWidgets.QWidget):
 
     def __init__(self, library, parent=None, library_loader=None):
@@ -81,7 +94,7 @@ class VredXWindow(QtWidgets.QWidget):
 
         self.library = library
         self.graph = Graph("VredX_Material")
-        self.stack = CommandStack()
+        self.stack = commands.CommandStack()
         self.bridge = MaterialBridge()
         self.current_path = None
         self._import_temp_dir = None
@@ -90,6 +103,9 @@ class VredXWindow(QtWidgets.QWidget):
         self._apply_pending = False
         self._material_applied_once = False
         self._nav_stack: List[str] = []
+        self._floating_shell = None
+        self._docked_parent = None
+        self._docked_layout = None
 
         self.inspector = InspectorPanel(self.stack, self)
         self.validation = ValidationPanel(self)
@@ -276,6 +292,12 @@ class VredXWindow(QtWidgets.QWidget):
         self._menu_attributes.setCheckable(True)
         self._menu_attributes.setChecked(True)
         self._menu_attributes.toggled.connect(self._toggle_attributes)
+        window_menu.addSeparator()
+        self._menu_pop_out = window_menu.addAction("Pop &Out Editor")
+        self._menu_pop_out.triggered.connect(self._pop_out_editor)
+        self._menu_dock = window_menu.addAction("Dock Editor")
+        self._menu_dock.triggered.connect(self._dock_editor)
+        self._menu_dock.setEnabled(False)
 
         self._add_menubar_actions(menubar)
         return menubar
@@ -348,6 +370,13 @@ class VredXWindow(QtWidgets.QWidget):
         self.scene.selectionChanged.connect(self._on_selection)
         self.scene.graph_changed.connect(self._on_graph_changed)
         self.scene.node_double_clicked.connect(self._on_node_double_clicked)
+        self.scene.create_compound_requested.connect(
+            self._create_compound_from_selection)
+        self.scene.add_graph_output_requested.connect(
+            self._add_graph_output_for_node)
+        self.scene.dissolve_compound_requested.connect(
+            self._dissolve_compound)
+        self.inspector.set_dissolve_callback(self._dissolve_compound)
         self.breadcrumb.navigated.connect(self._navigate_to_scope)
         self.palette_panel.add_requested.connect(self._add_from_palette)
         self.validation.issue_selected.connect(self._select_node)
@@ -556,6 +585,9 @@ class VredXWindow(QtWidgets.QWidget):
         self.scene.set_active_scope(compound_name)
         self._update_breadcrumb()
         self.scene.clearSelection()
+        self._inspector_selection = []
+        self.inspector.show_selection(
+            self.graph, [], active_scope=self.scene.active_scope)
         self.view.fit_all()
 
     def _navigate_to_scope(self, scope):
@@ -571,6 +603,9 @@ class VredXWindow(QtWidgets.QWidget):
             self._nav_stack[-1] if self._nav_stack else None)
         self._update_breadcrumb()
         self.scene.clearSelection()
+        self._inspector_selection = []
+        self.inspector.show_selection(
+            self.graph, [], active_scope=self.scene.active_scope)
         self.view.fit_all()
 
     def _sync_document_status(self, result):
@@ -627,7 +662,8 @@ class VredXWindow(QtWidgets.QWidget):
                         break
             selected = [node] if node is not None else []
         self._inspector_selection = sorted(n.name for n in selected)
-        self.inspector.show_selection(self.graph, selected)
+        self.inspector.show_selection(
+            self.graph, selected, active_scope=self.scene.active_scope)
         if selected:
             self.scene.clearSelection()
             for n in selected:
@@ -788,7 +824,8 @@ class VredXWindow(QtWidgets.QWidget):
             return
         self._inspector_selection = names
         nodes = [self.graph.nodes[n] for n in names if n in self.graph.nodes]
-        self.inspector.show_selection(self.graph, nodes)
+        self.inspector.show_selection(
+            self.graph, nodes, active_scope=self.scene.active_scope)
 
     def _on_node_double_clicked(self, node_name):
         node = self.graph.nodes.get(node_name)
@@ -801,7 +838,100 @@ class VredXWindow(QtWidgets.QWidget):
         self.tabs.setCurrentWidget(self.inspector)
         node = self.graph.nodes.get(node_name)
         if node is not None:
-            self.inspector.show_node(self.graph, node)
+            self.inspector.show_node(
+                self.graph, node, active_scope=self.scene.active_scope)
+
+    def _create_compound_from_selection(self, member_names):
+        if not member_names or self.scene.active_scope is not None:
+            return
+        default_name = "NG_%s" % member_names[0]
+        name, ok = QtWidgets.QInputDialog.getText(
+            self, "Create compound graph",
+            "Nodegraph name:",
+            QtWidgets.QLineEdit.Normal, default_name)
+        if not ok:
+            return
+        name = name.strip()
+        if not name:
+            return
+        xs = [self.graph.node(n).position[0] for n in member_names]
+        ys = [self.graph.node(n).position[1] for n in member_names]
+        position = (sum(xs) / len(xs), sum(ys) / len(ys))
+        try:
+            self.scene.stack.push(commands.CreateCompoundCommand(
+                self.graph, name, member_names, position))
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, "VredX", str(exc))
+            return
+        self._dirty = True
+
+    def _add_graph_output_for_node(self, node_name):
+        scope = self.scene.active_scope
+        if not scope:
+            return
+        node = self.graph.nodes.get(node_name)
+        if node is None or node.compound != scope or node.is_compound:
+            return
+        outputs = list(node.nodedef.outputs)
+        if not outputs:
+            QtWidgets.QMessageBox.information(
+                self, "VredX", "This node has no output ports to export.")
+            return
+        default_name = self.graph.unique_compound_output_name(
+            scope, "%s_output" % node.name)
+        if len(outputs) == 1:
+            port = outputs[0].name
+            name, ok = QtWidgets.QInputDialog.getText(
+                self, "Add graph output",
+                "Output name on the compound node:",
+                QtWidgets.QLineEdit.Normal, default_name)
+            if not ok or not name.strip():
+                return
+            output_name = name.strip()
+        else:
+            items = ["%s (%s)" % (o.name, o.type) for o in outputs]
+            port_item, ok = QtWidgets.QInputDialog.getItem(
+                self, "Add graph output", "Port:", items, 0, False)
+            if not ok:
+                return
+            port = outputs[items.index(port_item)].name
+            name, ok = QtWidgets.QInputDialog.getText(
+                self, "Add graph output",
+                "Output name on the compound node:",
+                QtWidgets.QLineEdit.Normal, default_name)
+            if not ok or not name.strip():
+                return
+            output_name = name.strip()
+        try:
+            self.scene.stack.push(commands.AddCompoundOutputCommand(
+                self.graph, scope, output_name, node_name, port))
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, "VredX", str(exc))
+            return
+        self._dirty = True
+        self.tabs.setCurrentWidget(self.inspector)
+        self._select_node(node_name)
+        self.inspector.show_node(
+            self.graph, node, active_scope=self.scene.active_scope)
+
+    def _dissolve_compound(self, compound_name):
+        if compound_name not in self.graph.compounds:
+            return
+        if (self.scene.active_scope == compound_name
+                or compound_name in self._nav_stack):
+            self._navigate_to_scope(None)
+        try:
+            self.scene.stack.push(commands.DissolveCompoundCommand(
+                self.graph, compound_name))
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, "VredX", str(exc))
+            return
+        self._dirty = True
+        self._inspector_selection = []
+        self.scene.clearSelection()
+        self.inspector.show_selection(
+            self.graph, [], active_scope=self.scene.active_scope)
+        self.view.fit_all()
 
     def _select_node(self, node_name):
         self.scene.clearSelection()
@@ -849,6 +979,36 @@ class VredXWindow(QtWidgets.QWidget):
 
     def _toggle_attributes(self, visible):
         self.tabs.setVisible(visible)
+
+    def _pop_out_editor(self):
+        if self._floating_shell is not None:
+            self._floating_shell.showNormal()
+            self._floating_shell.raise_()
+            self._floating_shell.activateWindow()
+            return
+        parent = self.parentWidget()
+        if parent is not None and parent.layout() is not None:
+            self._docked_parent = parent
+            self._docked_layout = parent.layout()
+            self._docked_layout.removeWidget(self)
+        self._floating_shell = VredXFloatingShell(self)
+        self._floating_shell.show()
+        self._menu_pop_out.setEnabled(False)
+        self._menu_dock.setEnabled(True)
+
+    def _dock_editor(self):
+        if self._floating_shell is None:
+            return
+        self._floating_shell.hide()
+        if self._docked_parent is not None and self._docked_layout is not None:
+            self.setParent(self._docked_parent)
+            self._docked_layout.addWidget(self)
+            self.show()
+        self._floating_shell.setCentralWidget(None)
+        self._floating_shell.deleteLater()
+        self._floating_shell = None
+        self._menu_pop_out.setEnabled(True)
+        self._menu_dock.setEnabled(False)
 
     def keyPressEvent(self, event):
         if event.key() == QtCore.Qt.Key_S and \

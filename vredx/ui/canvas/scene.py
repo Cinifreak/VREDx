@@ -29,6 +29,9 @@ class NodeGraphScene(QtWidgets.QGraphicsScene):
 
     graph_changed = QtCore.Signal()
     node_double_clicked = QtCore.Signal(str)
+    create_compound_requested = QtCore.Signal(list)
+    add_graph_output_requested = QtCore.Signal(str)
+    dissolve_compound_requested = QtCore.Signal(str)
 
     def __init__(self, graph: Graph, stack: commands.CommandStack,
                  library, parent=None):

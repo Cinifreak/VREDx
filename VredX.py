@@ -42,7 +42,7 @@ for _name in _vredx_modules:
     sys.modules.pop(_name, None)
 import vredx                                                    # noqa: E402
 
-from PySide6 import QtWidgets                                   # noqa: E402
+from PySide6 import QtCore, QtWidgets                                   # noqa: E402
 
 from vredx.core.nodedef_library import NodeDefLibrary           # noqa: E402
 from vredx.ui import style                                      # noqa: E402
@@ -63,6 +63,11 @@ class VredXPlugin:
             try:
                 parent_widget.setWindowTitle("VREDX")
                 parent_widget.setWindowIcon(style.vredx_icon())
+                flags = parent_widget.windowFlags()
+                flags |= (QtCore.Qt.WindowMinimizeButtonHint
+                          | QtCore.Qt.WindowMaximizeButtonHint)
+                parent_widget.setWindowFlags(flags)
+                parent_widget.show()
             except (AttributeError, RuntimeError):
                 pass
         else:
@@ -72,6 +77,7 @@ class VredXPlugin:
         self.menu = ui_integration.VredXMenu()
         self.menu.install({
             "open_editor": self.show_editor,
+            "pop_out_editor": self.pop_out_editor,
             "new_material": self.new_material,
             "import_mtlx": self.import_mtlx,
             "about": self.show_about,
@@ -97,6 +103,10 @@ class VredXPlugin:
             parent = parent.parentWidget()
             if isinstance(parent, QtWidgets.QMainWindow):
                 break
+
+    def pop_out_editor(self):
+        self.show_editor()
+        self.window._pop_out_editor()
 
     def new_material(self):
         self.show_editor()

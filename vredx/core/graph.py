@@ -161,6 +161,290 @@ class Graph:
                                 node_name: str) -> bool:
         return bool(self.compound_export_outputs(compound_name, node_name))
 
+    def compound_proxy(self, compound_name: str) -> Node:
+        node = self.node(compound_name)
+        if not node.is_compound:
+            raise GraphError("'%s' is not a compound nodegraph" % compound_name)
+        return node
+
+    def unique_compound_output_name(self, compound_name: str,
+                                    base: str) -> str:
+        base = _sanitize_name(base)
+        existing = {o.name for o in self.compounds.get(compound_name, ())}
+        if base not in existing:
+            return base
+        stem = re.sub(r"\d+$", "", base) or base
+        for i in itertools.count(1):
+            candidate = "%s%d" % (stem, i)
+            if candidate not in existing:
+                return candidate
+        raise AssertionError("unreachable")
+
+    def refresh_compound_proxy(self, compound_name: str) -> None:
+        """Rebuild the compound group node's interface ports."""
+        proxy = self.compound_proxy(compound_name)
+        outputs = self.compounds.get(compound_name, [])
+        proxy.nodedef = make_compound_nodedef(compound_name, outputs)
+
+    def add_compound_output(self, compound_name: str, output_name: str,
+                            internal_node: str,
+                            internal_output: str = "out") -> CompoundOutput:
+        """Expose an internal node port on the compound group node."""
+        if compound_name not in self.compounds:
+            raise GraphError("Unknown compound '%s'" % compound_name)
+        node = self.node(internal_node)
+        if node.compound != compound_name:
+            raise GraphError(
+                "Node '%s' is not inside compound '%s'"
+                % (internal_node, compound_name))
+        odef = node.output_def(internal_output)
+        names = {o.name for o in self.compounds[compound_name]}
+        if output_name in names:
+            raise GraphError(
+                "Compound output '%s' already exists" % output_name)
+        entry = CompoundOutput(
+            name=output_name, type=odef.type,
+            internal_node=internal_node,
+            internal_output=internal_output)
+        self.compounds[compound_name].append(entry)
+        self.refresh_compound_proxy(compound_name)
+        return entry
+
+    def remove_compound_output(self, compound_name: str,
+                               output_name: str) -> Tuple[CompoundOutput, List[Edge]]:
+        """Remove a compound export and disconnect its external edges."""
+        outputs = self.compounds.get(compound_name)
+        if outputs is None:
+            raise GraphError("Unknown compound '%s'" % compound_name)
+        match = None
+        kept = []
+        for output in outputs:
+            if output.name == output_name:
+                match = output
+            else:
+                kept.append(output)
+        if match is None:
+            raise GraphError(
+                "Compound '%s' has no output '%s'"
+                % (compound_name, output_name))
+        self.compounds[compound_name] = kept
+        removed = [e for e in self.edges
+                   if e.src_node == compound_name
+                   and e.src_output == output_name]
+        self.edges = [e for e in self.edges if e not in removed]
+        self.refresh_compound_proxy(compound_name)
+        return match, removed
+
+    def create_compound(self, name: str, member_names: List[str],
+                        position: Tuple[float, float] = (0.0, 0.0)
+                        ) -> Tuple[Node, dict]:
+        """Group *member_names* into a new compound nodegraph at document root.
+
+        Returns the compound proxy node and a snapshot dict for undo.
+        Outgoing edges crossing the new boundary are re-routed through
+        auto-created compound outputs; incoming edges are removed.
+        """
+        members = sorted(set(member_names))
+        if len(members) < 1:
+            raise GraphError("Select at least one node for a compound graph")
+        for member in members:
+            node = self.node(member)
+            if node.is_compound:
+                raise GraphError(
+                    "Cannot nest compound node '%s' inside another"
+                    % member)
+            if node.compound is not None:
+                raise GraphError(
+                    "Node '%s' is already inside compound '%s'"
+                    % (member, node.compound))
+
+        compound_name = self.unique_name(_sanitize_name(name))
+        member_set = set(members)
+        state = {
+            "compound_name": compound_name,
+            "members": members,
+            "prior_compound": {m: None for m in members},
+            "removed_edges": [],
+            "rewired_edges": [],
+        }
+
+        self.compounds[compound_name] = []
+        proxy = self.add_node(
+            make_compound_nodedef(compound_name, []),
+            name=compound_name, position=position, is_compound=True)
+        for member in members:
+            self.nodes[member].compound = compound_name
+
+        promoted: Dict[Tuple[str, str], str] = {}
+        for edge in list(self.edges):
+            src_inside = edge.src_node in member_set
+            dst_inside = edge.dst_node in member_set
+            if src_inside and not dst_inside:
+                key = (edge.src_node, edge.src_output)
+                if key not in promoted:
+                    out_name = self.unique_compound_output_name(
+                        compound_name,
+                        "%s_%s" % (edge.src_node, edge.src_output))
+                    self.add_compound_output(
+                        compound_name, out_name, key[0], key[1])
+                    promoted[key] = out_name
+                state["rewired_edges"].append(
+                    (edge, edge.src_node, edge.src_output))
+                edge.src_node = compound_name
+                edge.src_output = promoted[key]
+            elif dst_inside and not src_inside:
+                state["removed_edges"].append(edge)
+                self.edges.remove(edge)
+
+        state["outputs"] = list(self.compounds[compound_name])
+        state["proxy_position"] = position
+        return proxy, state
+
+    def reapply_create_compound(self, state: dict) -> None:
+        """Re-apply a compound creation after undo."""
+        compound_name = state["compound_name"]
+        outputs = list(state["outputs"])
+        self.compounds[compound_name] = outputs
+        nodedef = make_compound_nodedef(compound_name, outputs)
+        if compound_name in self.nodes:
+            proxy = self.nodes[compound_name]
+            proxy.nodedef = nodedef
+            proxy.is_compound = True
+            proxy.compound = None
+        else:
+            self.add_node(nodedef, name=compound_name,
+                          position=state["proxy_position"],
+                          is_compound=True)
+        for member in state["members"]:
+            self.node(member).compound = compound_name
+        for edge, old_src, old_output in state["rewired_edges"]:
+            out_name = next(
+                o.name for o in outputs
+                if o.internal_node == old_src
+                and o.internal_output == old_output)
+            edge.src_node = compound_name
+            edge.src_output = out_name
+        for edge in state["removed_edges"]:
+            if edge in self.edges:
+                self.edges.remove(edge)
+
+    def undo_create_compound(self, state: dict) -> None:
+        """Revert :meth:`create_compound`."""
+        compound_name = state["compound_name"]
+        for member in state["members"]:
+            self.node(member).compound = state["prior_compound"][member]
+        for edge, old_src, old_output in state["rewired_edges"]:
+            edge.src_node = old_src
+            edge.src_output = old_output
+        self.edges.extend(state["removed_edges"])
+        if compound_name in self.compounds:
+            del self.compounds[compound_name]
+        if compound_name in self.nodes:
+            del self.nodes[compound_name]
+
+    def dissolve_compound(self, compound_name: str) -> dict:
+        """Ungroup a compound nodegraph back onto the document root."""
+        if compound_name not in self.compounds:
+            raise GraphError("Unknown compound '%s'" % compound_name)
+        proxy = self.compound_proxy(compound_name)
+        members = sorted(
+            n.name for n in self.nodes.values()
+            if n.compound == compound_name and not n.is_compound)
+        outputs = list(self.compounds[compound_name])
+        state = {
+            "compound_name": compound_name,
+            "members": members,
+            "outputs": outputs,
+            "proxy_position": proxy.position,
+            "rewired_edges": [],
+        }
+        output_by_name = {o.name: o for o in outputs}
+        for edge in list(self.edges):
+            if edge.src_node != compound_name:
+                continue
+            output = output_by_name.get(edge.src_output)
+            if output is None:
+                continue
+            state["rewired_edges"].append(
+                (edge, edge.src_node, edge.src_output))
+            edge.src_node = output.internal_node
+            edge.src_output = output.internal_output
+        for member in members:
+            self.nodes[member].compound = None
+        del self.compounds[compound_name]
+        del self.nodes[compound_name]
+        from . import mtlx_paths
+        root_names = self.nodes_in_scope(None)
+        state["pre_layout_positions"] = {
+            name: tuple(self.node(name).position) for name in root_names}
+        mtlx_paths._layout_scope(self, None)
+        return state
+
+    def apply_dissolve_compound(self, state: dict) -> None:
+        """Re-apply :meth:`dissolve_compound` after undo."""
+        compound_name = state["compound_name"]
+        output_by_name = {o.name: o for o in state["outputs"]}
+        for edge, _compound, output_name in state["rewired_edges"]:
+            output = output_by_name[output_name]
+            edge.src_node = output.internal_node
+            edge.src_output = output.internal_output
+        for member in state["members"]:
+            self.node(member).compound = None
+        if compound_name in self.compounds:
+            del self.compounds[compound_name]
+        if compound_name in self.nodes:
+            del self.nodes[compound_name]
+        from . import mtlx_paths
+        root_names = self.nodes_in_scope(None)
+        state["pre_layout_positions"] = {
+            name: tuple(self.node(name).position) for name in root_names}
+        mtlx_paths._layout_scope(self, None)
+
+    def undo_dissolve_compound(self, state: dict) -> None:
+        """Restore a dissolved compound nodegraph."""
+        create_state = {
+            "compound_name": state["compound_name"],
+            "members": state["members"],
+            "outputs": list(state["outputs"]),
+            "proxy_position": state["proxy_position"],
+            "prior_compound": {m: None for m in state["members"]},
+            "removed_edges": [],
+            "rewired_edges": [],
+        }
+        output_by_name = {o.name: o for o in state["outputs"]}
+        for edge, _compound, output_name in state["rewired_edges"]:
+            output = output_by_name[output_name]
+            create_state["rewired_edges"].append(
+                (edge, output.internal_node, output.internal_output))
+        self.reapply_create_compound(create_state)
+        if "pre_layout_positions" in state:
+            self.restore_layout_positions(state["pre_layout_positions"])
+
+    def restore_layout_positions(self, positions: Dict[str, Tuple[float, float]]):
+        """Restore node positions captured before an auto-layout pass."""
+        for name, pos in positions.items():
+            if name in self.nodes:
+                self.nodes[name].position = pos
+
+    def _sync_compound_outputs_after_node_removed(self, name: str) -> None:
+        for compound_name in list(self.compounds):
+            before = len(self.compounds[compound_name])
+            self.compounds[compound_name] = [
+                o for o in self.compounds[compound_name]
+                if o.internal_node != name]
+            if len(self.compounds[compound_name]) != before:
+                self.refresh_compound_proxy(compound_name)
+
+    def _sync_compound_outputs_after_node_renamed(self, old: str, new: str):
+        for compound_name, outputs in self.compounds.items():
+            changed = False
+            for output in outputs:
+                if output.internal_node == old:
+                    output.internal_node = new
+                    changed = True
+            if changed:
+                self.refresh_compound_proxy(compound_name)
+
     def nodes_in_scope(self, scope: Optional[str] = None) -> List[str]:
         """Node names visible at *scope* (``None`` = document root)."""
         names: List[str] = []
@@ -193,6 +477,7 @@ class Graph:
                    if e.src_node == name or e.dst_node == name]
         self.edges = [e for e in self.edges if e not in removed]
         del self.nodes[name]
+        self._sync_compound_outputs_after_node_removed(name)
         return node, removed
 
     def restore_node(self, node: Node, edges: List[Edge]):
@@ -212,6 +497,7 @@ class Graph:
                 e.src_node = new
             if e.dst_node == old:
                 e.dst_node = new
+        self._sync_compound_outputs_after_node_renamed(old, new)
         return new
 
     def node(self, name: str) -> Node:
@@ -364,12 +650,29 @@ def material_ui_inputs(node: Node, connected: set) -> Iterator[str]:
         yield idef.name
 
 
+def exposable_literal_inputs(node: Node, graph: Graph) -> Iterator[str]:
+    """Literal inputs that may be written with uivisible for VRED."""
+    connected = connected_inputs(graph, node.name)
+    for idef in node.nodedef.inputs:
+        if idef.name in connected:
+            continue
+        if mtlx_types.is_shader_type(idef.type):
+            continue
+        yield idef.name
+
+
 def can_expose_in_material(node: Node, graph: Graph) -> bool:
     """Whether the inspector may offer an 'Expose in material' toggle."""
-    if node.is_shader_semantic():
+    if node.is_shader_semantic() or node.is_compound:
         return False
-    connected = connected_inputs(graph, node.name)
-    return any(True for _ in material_ui_inputs(node, connected))
+    if any(True for _ in exposable_literal_inputs(node, graph)):
+        return True
+    # Nested pattern nodes are often fully wired internally but still
+    # need literal parameters promoted to VRED's material editor.
+    if node.compound is not None:
+        return any(not mtlx_types.is_shader_type(idef.type)
+                   for idef in node.nodedef.inputs)
+    return False
 
 
 def infer_expose_in_material(node: Node, graph: Graph) -> bool:

@@ -61,6 +61,7 @@ class VredXMenu:
 
         entries = [
             ("Open MaterialX Editor", "open_editor"),
+            ("Pop Out Editor", "pop_out_editor"),
             ("New Material", "new_material"),
             ("Import .mtlx...", "import_mtlx"),
             (None, None),

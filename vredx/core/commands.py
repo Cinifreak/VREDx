@@ -261,3 +261,91 @@ class RenameNodeCommand(Command):
 
     def undo(self):
         self.graph.rename_node(self.actual, self.old_name)
+
+
+class AddCompoundOutputCommand(Command):
+    """Expose an internal node port on a compound nodegraph."""
+
+    def __init__(self, graph: Graph, compound_name: str, output_name: str,
+                 internal_node: str, internal_output: str = "out"):
+        self.graph = graph
+        self.compound_name = compound_name
+        self.output_name = output_name
+        self.internal_node = internal_node
+        self.internal_output = internal_output
+        self.entry = None
+        self.label = "Add graph output %s" % output_name
+
+    def redo(self):
+        self.entry = self.graph.add_compound_output(
+            self.compound_name, self.output_name,
+            self.internal_node, self.internal_output)
+
+    def undo(self):
+        self.graph.remove_compound_output(
+            self.compound_name, self.output_name)
+
+
+class RemoveCompoundOutputCommand(Command):
+    """Remove a compound export and restore external connections on undo."""
+
+    def __init__(self, graph: Graph, compound_name: str, output_name: str):
+        self.graph = graph
+        self.compound_name = compound_name
+        self.output_name = output_name
+        self._entry = None
+        self._edges: List[Edge] = []
+        self.label = "Remove graph output %s" % output_name
+
+    def redo(self):
+        self._entry, self._edges = self.graph.remove_compound_output(
+            self.compound_name, self.output_name)
+
+    def undo(self):
+        self.graph.compounds.setdefault(self.compound_name, []).append(
+            self._entry)
+        self.graph.refresh_compound_proxy(self.compound_name)
+        self.graph.edges.extend(self._edges)
+
+
+class CreateCompoundCommand(Command):
+    """Group selected root nodes into a nested nodegraph."""
+
+    def __init__(self, graph: Graph, compound_name: str,
+                 member_names: List[str],
+                 position: Tuple[float, float] = (0.0, 0.0)):
+        self.graph = graph
+        self.compound_name = compound_name
+        self.member_names = list(member_names)
+        self.position = position
+        self._state = None
+        self.label = "Create compound graph"
+
+    def redo(self):
+        if self._state is None:
+            _, self._state = self.graph.create_compound(
+                self.compound_name, self.member_names, self.position)
+        else:
+            self.graph.reapply_create_compound(self._state)
+
+    def undo(self):
+        self.graph.undo_create_compound(self._state)
+
+
+class DissolveCompoundCommand(Command):
+    """Ungroup a compound nodegraph back onto the document root."""
+
+    def __init__(self, graph: Graph, compound_name: str):
+        self.graph = graph
+        self.compound_name = compound_name
+        self._state = None
+        self.label = "Dissolve compound graph"
+
+    def redo(self):
+        if self._state is None:
+            self._state = self.graph.dissolve_compound(self.compound_name)
+        else:
+            self.graph.apply_dissolve_compound(self._state)
+
+    def undo(self):
+        self.graph.undo_dissolve_compound(self._state)
