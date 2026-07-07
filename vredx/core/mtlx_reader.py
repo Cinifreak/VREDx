@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Tuple
 
 from . import mtlx_archive, mtlx_paths, mtlx_types
 from .graph import (Graph, Node, make_compound_nodedef, make_opaque_nodedef,
-                    sync_expose_in_material, CompoundOutput)
+                    sync_expose_in_material, CompoundInput, CompoundOutput)
 from .mtlx_writer import POSITION_SCALE
 from .nodedef_library import InputDef, NodeDefLibrary
 
@@ -100,12 +100,24 @@ def read_document(text: str, library: NodeDefLibrary,
             compound_names.append(ng_name)
             for child in elem:
                 ctag = _strip_ns(child.tag)
+                if ctag == "input":
+                    _read_compound_input(graph, ng_name, child)
+                    continue
                 if ctag == "output":
                     out_name = child.get("name", "out")
-                    ng_outputs["%s/%s" % (ng_name, out_name)] = (
-                        "%s/%s" % (ng_name, child.get("nodename", "")),
-                        child.get("output", "out"),
-                        child.get("type", "float"))
+                    iface = child.get("interfacename")
+                    if iface:
+                        graph.compounds.setdefault(ng_name, []).append(
+                            CompoundOutput(
+                                name=out_name,
+                                type=child.get("type", "float"),
+                                internal_node="",
+                                interfacename=iface))
+                    else:
+                        ng_outputs["%s/%s" % (ng_name, out_name)] = (
+                            "%s/%s" % (ng_name, child.get("nodename", "")),
+                            child.get("output", "out"),
+                            child.get("type", "float"))
                     continue
                 if ctag in _NON_NODE_TAGS:
                     continue
@@ -140,6 +152,11 @@ def read_document(text: str, library: NodeDefLibrary,
             if _strip_ns(inp.tag) != "input":
                 continue
             input_name = inp.get("name", "")
+            iface = inp.get("interfacename")
+            if iface:
+                graph.node(dst_name).input_attrs.setdefault(
+                    input_name, {})["interfacename"] = iface
+                continue
             src_qual, src_output = _resolve_source(
                 inp, prefix, ng_outputs)
             if src_qual is None:
@@ -170,12 +187,29 @@ def _pick_variant(library: NodeDefLibrary, category: str, out_type: str,
 
     e.g. <multiply type="color3"> with a float "in2" input must resolve
     to ND_multiply_color3FA (color3 * float), not ND_multiply_color3.
+
+    Multi-output nodes (separate3, etc.) are authored as type="multioutput"
+    in MaterialX documents; pick the variant from the stream input type.
     """
     declared = {
         inp.get("name"): inp.get("type")
         for inp in elem
         if _strip_ns(inp.tag) == "input" and inp.get("type")
     }
+    if out_type == "multioutput":
+        stream_type = declared.get("in")
+        for nd in library.variants(category):
+            if len(nd.outputs) <= 1:
+                continue
+            found = nd.find_input("in")
+            if found is None:
+                continue
+            if stream_type is None or found.type == stream_type:
+                return nd
+        variants = [nd for nd in library.variants(category)
+                    if len(nd.outputs) > 1]
+        return variants[0] if variants else None
+
     best, best_score = None, -1
     for nd in library.variants(category):
         if nd.output_type != out_type:
@@ -243,8 +277,9 @@ def _create_node(graph: Graph, elem: ET.Element, library: NodeDefLibrary,
             node.nodedef.find_input(input_name).type
             if node.nodedef.find_input(input_name) else "float")
         if value_text is not None and node.nodedef.find_input(input_name):
-            node.values[input_name] = mtlx_types.parse_value(
-                input_type, value_text)
+            parsed = mtlx_types.parse_value(input_type, value_text)
+            if parsed is not None:
+                node.values[input_name] = parsed
         extra = {k: v for k, v in inp.attrib.items()
                  if k not in _STRUCTURAL_INPUT_ATTRS}
         if extra:
@@ -288,12 +323,14 @@ def _compound_outputs(graph: Graph, ng_name: str,
                       ng_outputs: Dict[str, Tuple[str, str, str]],
                       name_map: Dict[str, str]) -> List[CompoundOutput]:
     """Build compound interface outputs for a nodegraph."""
-    outputs: List[CompoundOutput] = []
+    outputs: List[CompoundOutput] = list(graph.compounds.get(ng_name, ()))
     prefix = ng_name + "/"
     for key, (qual, internal_output, out_type) in sorted(ng_outputs.items()):
         if not key.startswith(prefix):
             continue
         out_name = key[len(prefix):]
+        if any(o.name == out_name for o in outputs):
+            continue
         internal_node = name_map.get(qual)
         if internal_node is None:
             continue
@@ -302,6 +339,19 @@ def _compound_outputs(graph: Graph, ng_name: str,
             internal_node=internal_node,
             internal_output=internal_output))
     return outputs
+
+
+def _read_compound_input(graph: Graph, ng_name: str, elem: ET.Element):
+    """Parse a MaterialX nodegraph interface ``<input>`` declaration."""
+    name = elem.get("name", "")
+    input_type = elem.get("type", "float")
+    value_text = _input_value_text(elem)
+    value = (mtlx_types.parse_value(input_type, value_text)
+             if value_text is not None else None)
+    attrs = {k: v for k, v in elem.attrib.items()
+             if k not in ("name", "type", "value")}
+    graph.compound_inputs.setdefault(ng_name, []).append(
+        CompoundInput(name=name, type=input_type, value=value, attrs=attrs))
 
 
 def _make_edge(graph: Graph, src: str, src_output: str,

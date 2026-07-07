@@ -48,7 +48,7 @@ def write_document(graph: Graph, output_path: str = None) -> str:
     for node in _root_emit_order(graph):
         elem = ET.SubElement(root, node.category)
         elem.set("name", node.name)
-        elem.set("type", node.output_type)
+        elem.set("type", _element_type(node))
         _write_position(elem, node)
         _write_node_attrs(node, elem)
         _write_inputs(graph, node, elem, scope=None,
@@ -70,10 +70,19 @@ def _write_nodegraph(graph: Graph, root, compound_name: str,
                      filename_overrides):
     ng_elem = ET.SubElement(root, "nodegraph")
     ng_elem.set("name", compound_name)
+    for iface in graph.compound_inputs.get(compound_name, ()):
+        inp_elem = ET.SubElement(ng_elem, "input")
+        inp_elem.set("name", iface.name)
+        inp_elem.set("type", iface.type)
+        if iface.value is not None:
+            inp_elem.set("value",
+                         mtlx_types.format_value(iface.type, iface.value))
+        for key, value in sorted(iface.attrs.items()):
+            inp_elem.set(key, value)
     for node in _member_emit_order(graph, compound_name):
         elem = ET.SubElement(ng_elem, node.category)
         elem.set("name", node.name)
-        elem.set("type", node.output_type)
+        elem.set("type", _element_type(node))
         _write_position(elem, node)
         _write_node_attrs(node, elem)
         _write_inputs(graph, node, elem, scope=compound_name,
@@ -82,11 +91,14 @@ def _write_nodegraph(graph: Graph, root, compound_name: str,
         out_elem = ET.SubElement(ng_elem, "output")
         out_elem.set("name", output.name)
         out_elem.set("type", output.type)
-        out_elem.set("nodename", output.internal_node)
-        src = graph.node(output.internal_node)
-        if (len(src.nodedef.outputs) > 1
-                or output.internal_output != "out"):
-            out_elem.set("output", output.internal_output)
+        if output.interfacename:
+            out_elem.set("interfacename", output.interfacename)
+        else:
+            out_elem.set("nodename", output.internal_node)
+            src = graph.node(output.internal_node)
+            if (len(src.nodedef.outputs) > 1
+                    or output.internal_output != "out"):
+                out_elem.set("output", output.internal_output)
 
 
 def _root_emit_order(graph: Graph):
@@ -110,6 +122,13 @@ def _semantic_rank(output_type: str) -> int:
     if mtlx_types.is_shader_type(output_type):
         return 1
     return 0
+
+
+def _element_type(node) -> str:
+    """MaterialX element type attribute (multi-output nodes use multioutput)."""
+    if len(node.nodedef.outputs) > 1:
+        return "multioutput"
+    return node.output_type
 
 
 def _write_node_attrs(node, elem):
@@ -145,8 +164,28 @@ def _write_inputs(graph: Graph, node, elem, scope, filename_overrides=None):
         has_value = input_name in node.values
         idef = node.nodedef.find_input(input_name)
         input_type = idef.type if idef else "float"
+        attrs = dict(node.input_attrs.get(input_name, {}))
+        iface = attrs.pop("interfacename", None)
+        if iface:
+            inp = ET.SubElement(elem, "input")
+            inp.set("name", input_name)
+            inp.set("type", input_type)
+            inp.set("interfacename", iface)
+            for key, value in sorted(attrs.items()):
+                if key not in ("name", "type", "value", "nodename", "output",
+                               "nodegraph", "interfacename"):
+                    inp.set(key, value)
+            continue
+        if (edge is None and idef and idef.defaultgeomprop
+                and input_name not in node.values):
+            continue
         write_literal = edge is None and (
             has_value or _write_exposed_default(node, input_name, idef))
+        if edge is None and write_literal:
+            literal = filename_overrides.get(
+                input_name, node.get_value(input_name))
+            if literal is None:
+                write_literal = False
         if edge is None and not write_literal:
             continue
 
@@ -161,7 +200,6 @@ def _write_inputs(graph: Graph, node, elem, scope, filename_overrides=None):
             inp.set("value",
                     mtlx_types.format_value(input_type, value))
 
-        attrs = dict(node.input_attrs.get(input_name, {}))
         if edge is None and can_expose_in_material(node, graph):
             if node.expose_in_material:
                 attrs.pop("uivisible", None)
@@ -169,7 +207,7 @@ def _write_inputs(graph: Graph, node, elem, scope, filename_overrides=None):
                 attrs["uivisible"] = "false"
         for key, value in sorted(attrs.items()):
             if key not in ("name", "type", "value", "nodename", "output",
-                           "nodegraph"):
+                           "nodegraph", "interfacename"):
                 inp.set(key, value)
 
 

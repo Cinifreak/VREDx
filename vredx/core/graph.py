@@ -42,12 +42,22 @@ class Edge:
 
 
 @dataclass
+class CompoundInput:
+    """An exposed input parameter on a compound :class:`NodeGraph`."""
+    name: str
+    type: str
+    value: object = None
+    attrs: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
 class CompoundOutput:
     """A named output port on a compound :class:`NodeGraph`."""
     name: str
     type: str
     internal_node: str
     internal_output: str = "out"
+    interfacename: str = ""
 
 
 class Node:
@@ -123,6 +133,9 @@ class Graph:
         self.edges: List[Edge] = []
         # Compound nodegraph metadata: name -> exported output ports.
         self.compounds: Dict[str, List[CompoundOutput]] = {}
+        # Compound nodegraph exposed interface inputs (MaterialX <input> on
+        # <nodegraph>, not editable nodes).
+        self.compound_inputs: Dict[str, List[CompoundInput]] = {}
         self.colorspace = "lin_rec709"
         # Directory of the .mtlx file this graph was loaded from or last
         # saved to; used to resolve relative texture paths.
