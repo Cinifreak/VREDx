@@ -151,7 +151,7 @@ def input_name_from_bake_filename(
     """Map a baked texture filename back to a shader input name."""
     stem = _normalize_bake_stem(filename)
     if not allowed:
-        return stem.split("_")[-1] if "_" in stem else stem
+        return None
     for name in sorted(allowed, key=len, reverse=True):
         if stem == name or stem.endswith("_" + name):
             return name

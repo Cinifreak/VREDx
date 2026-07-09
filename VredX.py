@@ -2,13 +2,9 @@
 
 """VredX - MaterialX authoring plugin for Autodesk VRED.
 
-Entry point loaded by VRED's script-plugin mechanism.  Install with
-
-    python install.py
-
-from this folder (NOT by copying manually: the installer
-packages the vredx/ library into vredx.zip and drops tests/, because
-VRED's plugin scanner executes every loose .py file it finds).
+Entry point loaded by VRED's script-plugin mechanism.  Ship as ``VredX.py`` plus
+``vredx.zip`` (zip the ``vredx/`` package; do not leave loose ``vredx/*.py`` in
+ScriptPlugins — VRED's scanner executes every loose ``.py`` file it finds).
 
 Integration:
  * dockable panel via VREDPluginWidget (Scripts menu),

@@ -130,9 +130,9 @@ class BakeEngine:
                 bake_args.extend(["--template", aswf_template])
             for lib in runtime.library_search_paths():
                 bake_args.extend(["--library", lib])
-            if selected_inputs:
-                for name in sorted(selected_inputs):
-                    bake_args.extend(["--maps", name])
+            baked_maps = filter_maps(maps, selected_inputs)
+            for name in sorted(m.input_name for m in baked_maps):
+                bake_args.extend(["--maps", name])
 
             cmd = runtime.baker_subprocess_argv(bake_args)
             self._emit_log("$ %s\n" % " ".join(

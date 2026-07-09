@@ -28,9 +28,10 @@ applying MaterialX materials** inside Autodesk VRED Pro.
 1. Download **VredX-x.y.z.zip** from [Releases](https://github.com/ScottRaffertyCG/VREDx/releases).
 2. Extract into **either** install location below (match the version folder to
    your VRED install, e.g. `VRED-19.1` / `VREDPro-19.1` for VRED 2027).
-3. Confirm the result is a `VredX\` folder containing `VredX.py` and
-   `vredx.zip` (no loose `vredx/` folder).
-4. Restart VRED, then open **VREDX** from the menu bar or Scripts panel.
+3. Confirm the result is a `VredX\` folder containing `VredX.py`,
+   `vredx.zip`, and (for baking) `baking_runtime/` — no loose `vredx/` folder.
+4. Move `baking_runtime/` to `Documents/Autodesk/VredX/baking_runtime/` (see below).
+5. Restart VRED, then open **VREDX** from the menu bar or Scripts panel.
 
 **Program Files** (machine-wide; elevated prompt if VRED is under Program Files):
 
@@ -47,24 +48,19 @@ C:\Users\<you>\Documents\Autodesk\VRED-19.1\ScriptPlugins
 Both locations work. VredX loads its node palette from `VRED_ROOT` (set by
 VRED at runtime), not from the plugin folder path.
 
-### From source
+### From source (maintainers)
 
-Before building a release that includes texture baking, download the ASWF
-MaterialX 1.39.5 Windows prebuilt (Python 3.13) from
-[MaterialX releases](https://github.com/AcademySoftwareFoundation/MaterialX/releases)
-into `vredx/baking/third_party/materialx/`, then run:
+Zip the `vredx/` folder to `vredx.zip` and delete the loose `vredx/` folder.
+Ship **`VredX.py`**, **`vredx.zip`**, and **`baking_runtime/`** together in the
+release download. There is no automated installer in this repository.
 
-```powershell
-python build.py
-```
+For texture baking releases, download ASWF MaterialX 1.39.5 (Windows, Python 3.13)
+from [MaterialX releases](https://github.com/AcademySoftwareFoundation/MaterialX/releases)
+and place it at `baking_runtime/materialx/` beside `VredX.py`.
 
-Copy this repository into either location above as `VredX\`, then zip the
-`vredx/` folder to `vredx.zip` and delete the loose `vredx/` folder before
-starting VRED.
-
-**Do not leave loose `.py` files under `vredx/`.** VRED's plugin scanner executes
-every loose `.py` file it finds. The zip keeps the library importable via
-`sys.path` without being scanned.
+**Do not leave loose `.py` files under `vredx/` or inside `baking_runtime/` in
+ScriptPlugins.** VRED's plugin scanner executes every loose `.py` file it finds.
+The zip keeps the library importable via `sys.path` without being scanned.
 
 ### What gets installed
 
@@ -99,10 +95,6 @@ Documents/Autodesk/VredX/baking_runtime/
 Until that move is done, VredX starts normally but **hides** the Baking tab and
 menu entries. The ASWF bundle must not stay under ScriptPlugins — VRED scans
 loose `.py` files there.
-
-Maintainers: populate `vredx/baking/third_party/materialx/` from the ASWF
-MaterialX release bundle before `python build.py` so `baking_runtime/` is
-included in the release folder.
 
 ## Presets
 
