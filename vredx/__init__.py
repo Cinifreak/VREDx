@@ -7,15 +7,14 @@ Package layout:
     vredx.ui          PySide6 node-graph editor
     vredx.vredbridge  VRED integration (guarded imports, safe outside VRED)
 
-When installed, this package is shipped as ``vredx.zip`` (see
-install.py): VRED's script-plugin scanner executes every loose .py file
-it finds, which would run all library modules standalone at startup.
-Zip-imported modules are invisible to the scanner.
+When using the ``vredx/`` package from a source checkout, ship it as
+``vredx.zip`` beside ``VredX.py`` (see README): VRED's script-plugin scanner
+executes every loose ``.py`` file it finds.
 """
 
 import os
 
-__version__ = "0.5.8"
+__version__ = "0.6.0"
 
 
 def plugin_root() -> str:

@@ -6,10 +6,15 @@ venv/
 .pytest_cache/
 tests/
 install.py
+build.py
+packaging.py
 docs/*
 CHANGELOG.md
 resources/libraries/
 vredx.zip
+vredx/baking/third_party/materialx/*
+!vredx/baking/third_party/materialx/README.md
 dist/
+scripts/
 .vscode/
 *.log
