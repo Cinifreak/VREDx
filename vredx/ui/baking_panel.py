@@ -33,6 +33,32 @@ _CHECKBOX_STYLE = (
     "QCheckBox { color: #dcdce2; font-size: 11px;"
     " background: transparent; spacing: 6px; }"
     "QCheckBox::indicator { width: 13px; height: 13px; }")
+_MENU_CONNECTED_COLOR = "#dcdce2"
+_MENU_UNCONNECTED_COLOR = "#808088"
+
+
+class _MapMenuRow(QtWidgets.QWidget):
+    """Clickable menu row — Qt 6 QAction has no setForeground."""
+
+    clicked = QtCore.Signal()
+
+    def __init__(self, name: str, connected: bool, parent=None):
+        super().__init__(parent)
+        color = _MENU_CONNECTED_COLOR if connected else _MENU_UNCONNECTED_COLOR
+        layout = QtWidgets.QHBoxLayout(self)
+        layout.setContentsMargins(12, 6, 12, 6)
+        label = QtWidgets.QLabel(name, self)
+        label.setStyleSheet(
+            "color: %s; background: transparent; font-size: 11px;" % color)
+        layout.addWidget(label)
+        self.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == QtCore.Qt.LeftButton:
+            self.clicked.emit()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
 
 
 def _section_frame(title: str, bg: str) -> tuple[QtWidgets.QFrame, QtWidgets.QVBoxLayout]:
@@ -241,10 +267,17 @@ class _MapSlotEditor(QtWidgets.QWidget):
         if not available or self._add_btn is None:
             return
         menu = QtWidgets.QMenu(self)
+        menu.setStyleSheet(
+            "QMenu { background: #35353a; border: 1px solid #444448; }")
         for name in available:
-            action = menu.addAction(name)
-            action.triggered.connect(
-                lambda _=False, n=name: self._add_slot(n))
+            bake_map = self._catalog.get(name)
+            connected = bool(bake_map and bake_map.connected_node)
+            row = _MapMenuRow(name, connected, menu)
+            action = QtWidgets.QWidgetAction(menu)
+            action.setDefaultWidget(row)
+            row.clicked.connect(
+                lambda n=name, m=menu: (self._add_slot(n), m.close()))
+            menu.addAction(action)
         menu.exec(self._add_btn.mapToGlobal(
             QtCore.QPoint(0, self._add_btn.height())))
 
