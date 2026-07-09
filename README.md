@@ -49,11 +49,12 @@ VRED at runtime), not from the plugin folder path.
 
 ### From source
 
-Before building a release that includes texture baking, fetch the ASWF
-MaterialX runtime (Apache 2.0; bundled inside `vredx.zip`):
+Before building a release that includes texture baking, download the ASWF
+MaterialX 1.39.5 Windows prebuilt (Python 3.13) from
+[MaterialX releases](https://github.com/AcademySoftwareFoundation/MaterialX/releases)
+into `vredx/baking/third_party/materialx/`, then run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/fetch_materialx_baker.ps1
 python build.py
 ```
 
@@ -99,8 +100,9 @@ Until that move is done, VredX starts normally but **hides** the Baking tab and
 menu entries. The ASWF bundle must not stay under ScriptPlugins — VRED scans
 loose `.py` files there.
 
-Maintainers: run `scripts/fetch_materialx_baker.ps1` before `python build.py`
-so `baking_runtime/` is populated in the release folder.
+Maintainers: populate `vredx/baking/third_party/materialx/` from the ASWF
+MaterialX release bundle before `python build.py` so `baking_runtime/` is
+included in the release folder.
 
 ## Presets
 

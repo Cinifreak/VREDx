@@ -92,8 +92,8 @@ class BakeEngine:
 
         if not runtime.is_runtime_available():
             raise BakeError(
-                "MaterialX bake runtime is not installed. Run "
-                "scripts/fetch_materialx_baker.ps1 before building VredX.")
+                "MaterialX bake runtime is not installed. Move baking_runtime "
+                "to Documents/Autodesk/VredX/baking_runtime/.")
 
         width, height = normalize_resolution(width, height)
         spec = format_spec(fmt)

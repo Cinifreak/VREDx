@@ -13,5 +13,6 @@ vredx.zip
 vredx/baking/third_party/materialx/*
 !vredx/baking/third_party/materialx/README.md
 dist/
+scripts/
 .vscode/
 *.log

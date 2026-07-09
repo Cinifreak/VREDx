@@ -506,8 +506,8 @@ class BakingPanel(QtWidgets.QWidget):
             self.bake_btn.setEnabled(False)
             self.batch_btn.setEnabled(False)
             self.status.setText(
-                "Bake runtime missing. Maintainer: run "
-                "scripts/fetch_materialx_baker.ps1, then reinstall VredX.")
+                "Bake runtime missing. Move baking_runtime to "
+                "Documents/Autodesk/VredX/baking_runtime/.")
 
         self.sync_from_graph()
 

@@ -5,16 +5,18 @@ texture baking. It is **not modified** by VredX (Apache License 2.0).
 
 ## Maintainer setup
 
-From the VredX repository root, run:
+Download **MaterialX 1.39.5** for Windows (Python 3.13) from
+[MaterialX releases](https://github.com/AcademySoftwareFoundation/MaterialX/releases)
+and extract into this folder (`vredx/baking/third_party/materialx/`).
+
+Then build from the repository root:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/fetch_materialx_baker.ps1
 python build.py
 ```
 
-The fetch script downloads MaterialX 1.39.5 for Windows (Python 3.13) plus an
-embeddable CPython 3.13 interpreter. Release builds copy the runtime to
-`baking_runtime/materialx/` next to `VredX.py` (it is stripped from `vredx.zip`).
+Release builds copy the runtime to `baking_runtime/materialx/` next to
+`VredX.py` (it is stripped from `vredx.zip`).
 
 ## Release layout
 
@@ -38,7 +40,7 @@ VRED must not load the ASWF Python tree from ScriptPlugins (it scans loose
 `.py` files). Until the runtime is moved, VredX works normally but hides all
 baking UI.
 
-## Expected layout after fetch
+## Expected layout after download
 
 ```
 materialx/
